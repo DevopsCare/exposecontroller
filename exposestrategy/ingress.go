@@ -21,7 +21,9 @@ import (
 const (
 	// PathModeUsePath path mode tells to use "/<namespace>/name" as path
 	PathModeUsePath = "path"
+	// ServiceAPIVersion the expected apiVersion of a service
 	ServiceAPIVersion = "v1"
+	// ServiceKind the expected kind of a service
 	ServiceKind = "Service"
 )
 
