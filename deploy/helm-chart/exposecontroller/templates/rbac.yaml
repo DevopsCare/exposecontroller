@@ -1,9 +1,11 @@
-{{- $cluster := not (kindIs "invalid" .Values.watchNamespaces) -}}
-{{- if kindIs "invalid" .Values.watchCurrentNamespace -}}
-{{- else if and $cluster .Values.watchCurrentNamespace -}}
-  {{- fail "Must either watch the current namespace or specific namespaces" -}}
-{{- else -}}
-  {{- $cluster = not .Values.watchCurrentNamespace -}}
+{{- $cluster := not (or .Values.watchCurrentNamespace (kindIs "invalid" .Values.watchCurrentNamespace)) -}}
+{{- if not (kindIs "invalid" .Values.watchNamespaces) -}}
+  {{- $cluster = true -}}
+  {{- if not .Values.watchNamespaces -}}
+    {{- fail "watchNamespaces must be either nil or not empty" -}}
+  {{- else if .Values.watchCurrentNamespace -}}
+    {{- fail "cannot use both watchNamespaces and watchCurrentNamespace" -}}
+  {{- end -}}
 {{- end -}}
 
 {{- if $cluster -}}

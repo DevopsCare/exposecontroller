@@ -21,8 +21,7 @@ spec:
         command:
         - /exposecontroller
         - --daemon
-        - --watch-current-namespace
-        - "false"
+        - --watch-current-namespace=false
         env:
         - name: KUBERNETES_NAMESPACE
           valueFrom:
