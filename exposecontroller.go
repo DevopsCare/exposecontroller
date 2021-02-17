@@ -182,6 +182,8 @@ func main() {
 		if err == nil {
 			go registerHandlers(contr)
 			contr.Run(wait.NeverStop)
+		} else {
+			klog.Fatalf("%s", err)
 		}
 	} else {
 		klog.Infof("Running in : `%s`", watchNamespaces)
@@ -233,9 +235,9 @@ func registerHandlers(controller cache.Controller) {
 		ready := controller.HasSynced()
 
 		if ready {
-			res.WriteHeader(http.StatusServiceUnavailable)
-		} else {
 			res.WriteHeader(http.StatusOK)
+		} else {
+			res.WriteHeader(http.StatusServiceUnavailable)
 		}
 
 		enc := json.NewEncoder(res)
