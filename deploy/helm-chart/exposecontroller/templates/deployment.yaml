@@ -12,12 +12,12 @@ metadata:
     helm.sh/chart: {{ include "exposecontroller.chart" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
-  {{- if .Values.annotations }}
   annotations:
-    {{- toYaml .Values.Annotations | nindent 4 }}
-  {{- else if .Values.Annotations }}
-  annotations:
-    {{- toYaml .Values.Annotations | nindent 4 }}
+  {{- range $key, $val := .Values.annotations }}
+    {{ $key | quote }}: {{ $val | quote }}
+  {{- end }}
+  {{- range $key, $val := .Values.Annotations }}
+    {{ $key | quote }}: {{ $val | quote }}
   {{- end }}
 spec:
   replicas: 1
