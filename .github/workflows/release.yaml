@@ -17,10 +17,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install pack
-        run: |
-          wget -qO- https://github.com/buildpacks/pack/releases/download/v0.23.1/pack-v0.23.1-linux.tgz | tar xvz -C /tmp
-          sudo mv /tmp/pack /usr/local/bin
+      - id: setup-pack
+        uses: buildpacks/github-actions/setup-pack@v5.0.0
 
       - name: Login to GHCR
         uses: docker/login-action@v1
