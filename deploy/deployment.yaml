@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: exposecontroller
-        image: "olliai/exposecontroller:latest"
+        image: "devopscare/exposecontroller:latest"
         command:
         - /exposecontroller
         - --daemon
