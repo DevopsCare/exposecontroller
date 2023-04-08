@@ -2,16 +2,13 @@
 
 Automatically expose services creating ingress rules or modifying services to use kubernetes nodePort or loadBalancer service types
 
-This is a fork from the dead project https://github.com/jenkins-x/exposecontroller in order to solve many problems
+This is a fork from the https://github.com/devopscare/exposecontroller,
+updated to latest Kubernetes and `networkV1` Ingress objects.
 
 ## Deployment
 
 ### From helm repository
-
-```bash
-helm repo add olli-ai https://olli-ai.github.io/helm-charts/
-helm upgrade --install exposecontroller olli-ai/exposecontroller
-```
+TODO
 
 ### Using Helm
 
@@ -23,9 +20,9 @@ helm upgrade --install exposecontroller ./deploy/helm-chart/exposecontroller
 
 ```bash
 # Create roles and service accounts
-kubectl apply -f https://raw.githubusercontent.com/olli-ai/exposecontroller/master/deploy/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/devopscare/exposecontroller/master/deploy/rbac.yaml
 # Create actual deployment
-kubectl apply -f https://raw.githubusercontent.com/olli-ai/exposecontroller/master/deploy/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/devopscare/exposecontroller/master/deploy/deployment.yaml
 ```
 
 ### In Jenkins-X environments
@@ -34,7 +31,7 @@ kubectl apply -f https://raw.githubusercontent.com/olli-ai/exposecontroller/mast
 export VERSION=latest
 # set the repository and version
 sed '/\(- \|  \)name: exposecontroller/{n;N;d}' -i env/requirements.yaml
-sed "s#\( *\)\(- \|  \)name: exposecontroller#\0\n\1  repository: https://olli-ai.github.io/helm-charts/\n\1  version: $VERSION#" \
+sed "s#\( *\)\(- \|  \)name: exposecontroller#\0\n\1  repository: https://devopscare.github.io/helm-charts/\n\1  version: $VERSION#" \
   -i env/requirements.yaml
 # add a name prefix for the ingress
 sed -i 's/^\( *\)urltemplate:.*/\0\n\1namePrefix: exposed-/' env/values.yaml
@@ -46,7 +43,7 @@ sed -i 's/^\( *\)urltemplate:.*/\0\n\1namePrefix: exposed-/' env/values.yaml
 export VERSION=latest
 # set the repository and version
 sed '/\(- \|  \)name: exposecontroller/{n;N;d}' -i charts/preview/requirements.yaml
-sed "s#\( *\)\(- \|  \)name: exposecontroller#\0\n\1  repository: https://olli-ai.github.io/helm-charts/\n\1  version: $VERSION#" \
+sed "s#\( *\)\(- \|  \)name: exposecontroller#\0\n\1  repository: https://devopscare.github.io/helm-charts/\n\1  version: $VERSION#" \
   -i charts/preview/requirements.yaml
 # add a name prefix for the ingress
 sed -i 's/^\( *\)urltemplate:.*/\0\n\1namePrefix: exposed-/' charts/preview/values.yaml

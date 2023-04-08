@@ -104,7 +104,7 @@ func getAutoDefaultDomain(ctx context.Context, c kubernetes.Interface) (string, 
 			}
 		}
 	}
-	return "", errors.New("no known automatic ways to get an external ip to use with nip.  Please configure exposecontroller configmap manually see https://github.com/olli-ai/exposecontroller#configuration")
+	return "", errors.New("no known automatic ways to get an external ip to use with nip.  Please configure exposecontroller configmap manually see https://github.com/devopscare/exposecontroller#configuration")
 }
 
 // copied from k8s.io/kubernetes/pkg/master/master.go

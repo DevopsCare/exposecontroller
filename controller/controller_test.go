@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/olli-ai/exposecontroller/exposestrategy"
+	"github.com/devopscare/exposecontroller/exposestrategy"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

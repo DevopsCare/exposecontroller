@@ -1,4 +1,4 @@
-module github.com/olli-ai/exposecontroller
+module github.com/devopscare/exposecontroller
 
 go 1.13
 
