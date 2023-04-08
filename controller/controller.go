@@ -2,7 +2,9 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/watch"
 	"net/url"
 	"strconv"
 	"strings"
@@ -23,17 +25,17 @@ import (
 
 const (
 	// ExposeConfigURLProtocol annotation holds the field to export the protocol to
-	ExposeConfigURLProtocol                       = "expose.config.fabric8.io/url-protocol"
+	ExposeConfigURLProtocol = "expose.config.fabric8.io/url-protocol"
 	// ExposeConfigURLKeyAnnotation annotation holds the field to export the url to
-	ExposeConfigURLKeyAnnotation                  = "expose.config.fabric8.io/url-key"
+	ExposeConfigURLKeyAnnotation = "expose.config.fabric8.io/url-key"
 	// ExposeConfigHostKeyAnnotation annotation holds the field to export the host to
-	ExposeConfigHostKeyAnnotation                 = "expose.config.fabric8.io/host-key"
+	ExposeConfigHostKeyAnnotation = "expose.config.fabric8.io/host-key"
 	// ExposeConfigClusterPathKeyAnnotation annotation holds the field to export the path to
-	ExposeConfigClusterPathKeyAnnotation          = "expose.config.fabric8.io/path-key"
+	ExposeConfigClusterPathKeyAnnotation = "expose.config.fabric8.io/path-key"
 	// ExposeConfigClusterIPKeyAnnotation annotation holds the field to export the .Spec.ClusterIP field to
-	ExposeConfigClusterIPKeyAnnotation            = "expose.config.fabric8.io/clusterip-key"
+	ExposeConfigClusterIPKeyAnnotation = "expose.config.fabric8.io/clusterip-key"
 	// ExposeConfigClusterIPPortKeyAnnotation annotation holds the field to export the clusterIP with port to
-	ExposeConfigClusterIPPortKeyAnnotation        = "expose.config.fabric8.io/clusterip-port-key"
+	ExposeConfigClusterIPPortKeyAnnotation = "expose.config.fabric8.io/clusterip-port-key"
 	// ExposeConfigClusterIPPortIfEmptyKeyAnnotation annotation holds the field to export the clusterIP with port to, but if the configmap's field is empty
 	ExposeConfigClusterIPPortIfEmptyKeyAnnotation = "expose.config.fabric8.io/clusterip-port-if-empty-key"
 	// ExposeConfigYamlAnnotation annotation holds the field to export the service's url as a yaml object
@@ -43,7 +45,7 @@ const (
 )
 
 // Run runs the controller until synced or timeout
-func Run(client kubernetes.Interface, namespace string, config *Config, timeout time.Duration) error {
+func Run(ctx context.Context, client kubernetes.Interface, namespace string, config *Config, timeout time.Duration) error {
 	var hasSyncedTimeout <-chan time.Time
 	if timeout > 0*time.Second {
 		hasSyncedTimeout = time.After(timeout)
@@ -54,17 +56,17 @@ func Run(client kubernetes.Interface, namespace string, config *Config, timeout 
 	hasSyncedController := make(chan struct{})
 	hasSyncedStrategy := make(chan struct{})
 
-	controller, err := createController(client, namespace, config, time.Hour, hasSyncedController, hasSyncedStrategy)
+	controller, err := createController(ctx, client, namespace, config, time.Hour, hasSyncedController, hasSyncedStrategy)
 	if err != nil {
 		return err
 	}
 
 	go func() {
 		select {
-		case <- hasSyncedTimeout:
+		case <-hasSyncedTimeout:
 			err = fmt.Errorf("timeout")
-		case <- hasSyncedController:
-		case <- hasSyncedStrategy:
+		case <-hasSyncedController:
+		case <-hasSyncedStrategy:
 		}
 		close(hasSynced)
 	}()
@@ -73,12 +75,12 @@ func Run(client kubernetes.Interface, namespace string, config *Config, timeout 
 }
 
 // Daemon returns a controller for a daemon run
-func Daemon(client kubernetes.Interface, namespace string, config *Config, resyncPeriod time.Duration) (cache.Controller, error) {
-	return createController(client, namespace, config, resyncPeriod, nil, nil)
+func Daemon(ctx context.Context, client kubernetes.Interface, namespace string, config *Config, resyncPeriod time.Duration) (cache.Controller, error) {
+	return createController(ctx, client, namespace, config, resyncPeriod, nil, nil)
 }
 
-func createController(client kubernetes.Interface, namespace string, config *Config, resyncPeriod time.Duration, hasSyncedController, hasSyncedStrategy chan struct{}) (cache.Controller, error) {
-	strategy, err := getStrategy(client, namespace, config)
+func createController(ctx context.Context, client kubernetes.Interface, namespace string, config *Config, resyncPeriod time.Duration, hasSyncedController, hasSyncedStrategy chan struct{}) (cache.Controller, error) {
+	strategy, err := getStrategy(ctx, client, namespace, config)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +110,7 @@ func createController(client kubernetes.Interface, namespace string, config *Con
 				if err != nil {
 					klog.Errorf("Add failed: %v", err)
 				}
-				updateRelatedResources(client, svc, config)
+				updateRelatedResources(ctx, client, svc, config)
 			} else if isSyncing {
 				if !isServiceWhitelisted(svc.Name, config) {
 					return
@@ -117,7 +119,7 @@ func createController(client kubernetes.Interface, namespace string, config *Con
 				if err != nil {
 					klog.Errorf("Remove failed: %v", err)
 				}
-				if (needCheckSynced) {
+				if needCheckSynced {
 					needCheckSynced = false
 					go checkSynced()
 				}
@@ -139,7 +141,7 @@ func createController(client kubernetes.Interface, namespace string, config *Con
 				if err != nil {
 					klog.Errorf("Add failed: %v", err)
 				}
-				updateRelatedResources(client, svc, config)
+				updateRelatedResources(ctx, client, svc, config)
 			} else if shouldExposeService(oldObj.(*v1.Service)) {
 				if !isServiceWhitelisted(svc.Name, config) {
 					return
@@ -180,12 +182,12 @@ func createController(client kubernetes.Interface, namespace string, config *Con
 
 	_, controller = cache.NewInformer(
 		&cache.ListWatch{
-			ListFunc:  func(options metav1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				err := strategy.Sync()
 				if err != nil {
 					return nil, err
 				}
-				list, err := services.List(options)
+				list, err := services.List(ctx, options)
 				if err != nil {
 					return nil, err
 				}
@@ -193,7 +195,9 @@ func createController(client kubernetes.Interface, namespace string, config *Con
 				go checkSynced()
 				return list, nil
 			},
-			WatchFunc: services.Watch,
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return services.Watch(ctx, options)
+			},
 		},
 		&v1.Service{},
 		resyncPeriod,
@@ -206,12 +210,12 @@ func createController(client kubernetes.Interface, namespace string, config *Con
 // for testing only
 var testStrategy exposestrategy.ExposeStrategy
 
-func getStrategy(client kubernetes.Interface, namespace string, config *Config) (exposestrategy.ExposeStrategy, error) {
+func getStrategy(ctx context.Context, client kubernetes.Interface, namespace string, config *Config) (exposestrategy.ExposeStrategy, error) {
 	// for testing only
 	if testStrategy != nil {
 		return testStrategy, nil
 	}
-	strategy, err := exposestrategy.New(client, &exposestrategy.Config{
+	strategy, err := exposestrategy.New(ctx, client, &exposestrategy.Config{
 		Exposer:        config.Exposer,
 		Namespace:      namespace,
 		NamePrefix:     config.NamePrefix,
@@ -253,12 +257,12 @@ func isServiceWhitelisted(service string, config *Config) bool {
 	return false
 }
 
-func updateRelatedResources(c kubernetes.Interface, svc *v1.Service, config *Config) {
-	updateServiceConfigMap(c, svc, config)
+func updateRelatedResources(ctx context.Context, c kubernetes.Interface, svc *v1.Service, config *Config) {
+	updateServiceConfigMap(ctx, c, svc, config)
 
 	exposeURL := svc.Annotations[exposestrategy.ExposeAnnotationKey]
 	if exposeURL != "" {
-		updateOtherConfigMaps(c, svc, config, exposeURL)
+		updateOtherConfigMaps(ctx, c, svc, config, exposeURL)
 	}
 }
 
@@ -283,10 +287,10 @@ type configYaml struct {
 	Suffix     string
 }
 
-func updateServiceConfigMap(c kubernetes.Interface, svc *v1.Service, config *Config) {
+func updateServiceConfigMap(ctx context.Context, c kubernetes.Interface, svc *v1.Service, config *Config) {
 	name := svc.Name
 	ns := svc.Namespace
-	cm, err := c.CoreV1().ConfigMaps(ns).Get(name, metav1.GetOptions{})
+	cm, err := c.CoreV1().ConfigMaps(ns).Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
 		updated := false
 
@@ -365,8 +369,8 @@ func updateServiceConfigMap(c kubernetes.Interface, svc *v1.Service, config *Con
 					klog.Errorf("Failed to unmarshal Config YAML on configMap %s due to %s : YAML: %s", cm.Name, err, configYamlS)
 				} else {
 					values := map[string]string{
-						"host":              host,
-						"url":               exposeURL,
+						"host": host,
+						"url":  exposeURL,
 					}
 					fmt.Printf("Loading yaml config %#v\n", configs)
 					for _, c := range configs {
@@ -379,11 +383,11 @@ func updateServiceConfigMap(c kubernetes.Interface, svc *v1.Service, config *Con
 		}
 		if updated {
 			klog.Infof("Updating ConfigMap %s/%s", ns, name)
-			_, err = c.CoreV1().ConfigMaps(ns).Update(cm)
+			_, err = c.CoreV1().ConfigMaps(ns).Update(ctx, cm, metav1.UpdateOptions{})
 			if err != nil {
 				klog.Errorf("Failed to update ConfigMap %s error: %v", name, err)
 			}
-			err = rollingUpgradeDeployments(cm, c)
+			err = rollingUpgradeDeployments(ctx, cm, c)
 			if err != nil {
 				klog.Errorf("Failed to update Deployments after change to ConfigMap %s error: %v", name, err)
 			}
@@ -443,7 +447,7 @@ func (c *configYaml) updateConfigMap(configMap *v1.ConfigMap, values map[string]
 }
 
 // updateOtherConfigMaps lets update all other configmaps which want to be injected by this svc exposeURL
-func updateOtherConfigMaps(c kubernetes.Interface, svc *v1.Service, config *Config, exposeURL string) error {
+func updateOtherConfigMaps(ctx context.Context, c kubernetes.Interface, svc *v1.Service, config *Config, exposeURL string) error {
 	serviceName := svc.Name
 	annotationKey := "expose.service-key.config.fabric8.io/" + serviceName
 	annotationFullKey := "expose-full.service-key.config.fabric8.io/" + serviceName
@@ -452,7 +456,7 @@ func updateOtherConfigMaps(c kubernetes.Interface, svc *v1.Service, config *Conf
 	annotationFullNoProtocolKey := "expose-full-no-protocol.service-key.config.fabric8.io/" + serviceName
 	annotationProtocolKey := "expose-protocol.service-key.config.fabric8.io/" + serviceName
 	ns := svc.Namespace
-	cms, err := c.CoreV1().ConfigMaps(ns).List(metav1.ListOptions{})
+	cms, err := c.CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -563,7 +567,7 @@ func updateOtherConfigMaps(c kubernetes.Interface, svc *v1.Service, config *Conf
 			}
 		}
 		if update {
-			_, err = c.CoreV1().ConfigMaps(ns).Update(&cm)
+			_, err = c.CoreV1().ConfigMaps(ns).Update(ctx, &cm, metav1.UpdateOptions{})
 			if err != nil {
 				return fmt.Errorf("Failed to update ConfigMap %s in namespace %s with key %s due to %v", cm.Name, ns, updateKey, err)
 			}

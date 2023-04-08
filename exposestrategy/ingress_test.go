@@ -1,13 +1,13 @@
 package exposestrategy
 
 import (
+	"context"
 	"testing"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +15,7 @@ import (
 )
 
 func TestGetIngressService(t *testing.T) {
-	examples := []struct{
+	examples := []struct {
 		name string
 		meta metav1.ObjectMeta
 		svc  string
@@ -25,8 +25,8 @@ func TestGetIngressService(t *testing.T) {
 	}, {
 		name: "missing label",
 		meta: metav1.ObjectMeta{
-			Name:        "test-ingress",
-			Namespace:   "test-namespace",
+			Name:      "test-ingress",
+			Namespace: "test-namespace",
 			Annotations: map[string]string{
 				"fabric8.io/generated-by": "exposecontroller",
 			},
@@ -34,8 +34,8 @@ func TestGetIngressService(t *testing.T) {
 	}, {
 		name: "missing annotation",
 		meta: metav1.ObjectMeta{
-			Name:        "test-ingress",
-			Namespace:   "test-namespace",
+			Name:      "test-ingress",
+			Namespace: "test-namespace",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -43,8 +43,8 @@ func TestGetIngressService(t *testing.T) {
 	}, {
 		name: "no owner",
 		meta: metav1.ObjectMeta{
-			Name:        "test-ingress",
-			Namespace:   "test-namespace",
+			Name:      "test-ingress",
+			Namespace: "test-namespace",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -52,12 +52,12 @@ func TestGetIngressService(t *testing.T) {
 				"fabric8.io/generated-by": "exposecontroller",
 			},
 		},
-		del:  true,
+		del: true,
 	}, {
 		name: "empty owner",
 		meta: metav1.ObjectMeta{
-			Name:        "test-ingress",
-			Namespace:   "test-namespace",
+			Name:      "test-ingress",
+			Namespace: "test-namespace",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -66,12 +66,12 @@ func TestGetIngressService(t *testing.T) {
 			},
 			OwnerReferences: []metav1.OwnerReference{},
 		},
-		del:  true,
+		del: true,
 	}, {
 		name: "owner not a service",
 		meta: metav1.ObjectMeta{
-			Name:        "test-ingress",
-			Namespace:   "test-namespace",
+			Name:      "test-ingress",
+			Namespace: "test-namespace",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -84,12 +84,12 @@ func TestGetIngressService(t *testing.T) {
 				Name:       "test-deployment",
 			}},
 		},
-		del:  true,
+		del: true,
 	}, {
 		name: "right",
 		meta: metav1.ObjectMeta{
-			Name:        "test-ingress",
-			Namespace:   "test-namespace",
+			Name:      "test-ingress",
+			Namespace: "test-namespace",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -102,12 +102,12 @@ func TestGetIngressService(t *testing.T) {
 				Name:       "test-service",
 			}},
 		},
-		svc:  "test-namespace/test-service",
+		svc: "test-namespace/test-service",
 	}, {
 		name: "too many owners",
 		meta: metav1.ObjectMeta{
-			Name:        "test-ingress",
-			Namespace:   "test-namespace",
+			Name:      "test-ingress",
+			Namespace: "test-namespace",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -124,10 +124,10 @@ func TestGetIngressService(t *testing.T) {
 				Name:       "test-service-2",
 			}},
 		},
-		del:  true,
+		del: true,
 	}}
 	for _, example := range examples {
-		svc, del := getIngressService(&v1beta1.Ingress{
+		svc, del := getIngressService(&networkingv1.Ingress{
 			ObjectMeta: example.meta,
 		})
 		assert.Equal(t, example.svc, svc, example.name)
@@ -136,10 +136,10 @@ func TestGetIngressService(t *testing.T) {
 }
 
 func TestIngressStrategy_Sync(t *testing.T) {
-	objects := []runtime.Object{&v1beta1.Ingress{
+	objects := []runtime.Object{&networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress1",
+			Name:      "ingress1",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -153,10 +153,10 @@ func TestIngressStrategy_Sync(t *testing.T) {
 			}},
 			ResourceVersion: "1",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress2",
+			Name:      "ingress2",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -170,10 +170,10 @@ func TestIngressStrategy_Sync(t *testing.T) {
 			}},
 			ResourceVersion: "2",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress3",
+			Name:      "ingress3",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -182,10 +182,10 @@ func TestIngressStrategy_Sync(t *testing.T) {
 			},
 			ResourceVersion: "3",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "other",
-			Name: "ingress4",
+			Name:      "ingress4",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -194,10 +194,10 @@ func TestIngressStrategy_Sync(t *testing.T) {
 			},
 			ResourceVersion: "4",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress5",
+			Name:      "ingress5",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -211,10 +211,10 @@ func TestIngressStrategy_Sync(t *testing.T) {
 			}},
 			ResourceVersion: "5",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress6",
+			Name:      "ingress6",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -232,8 +232,8 @@ func TestIngressStrategy_Sync(t *testing.T) {
 	client := fake.NewSimpleClientset(objects...)
 
 	strategy := IngressStrategy{
-		client:         client,
-		namespace:      "main",
+		client:    client,
+		namespace: "main",
 	}
 	strategy.Sync()
 
@@ -247,18 +247,19 @@ func TestIngressStrategy_Sync(t *testing.T) {
 		existing[svc] = names
 	}
 	expectedE := map[string]map[string]bool{
-		"main/service1": map[string]bool{
+		"main/service1": {
 			"ingress1": true,
 			"ingress5": true,
 		},
-		"main/service2": map[string]bool{
+		"main/service2": {
 			"ingress6": true,
 		},
 	}
 	assert.Equal(t, expectedE, existing, "strategy.existing")
 
 	found := map[string]bool{}
-	list, err := client.ExtensionsV1beta1().Ingresses("").List(metav1.ListOptions{})
+	ctx := context.Background()
+	list, err := client.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if assert.NoError(t, err) {
 		for _, ingress := range list.Items {
 			found[ingress.Name] = true
@@ -278,8 +279,8 @@ func TestIngressStrategy_Add(t *testing.T) {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "source",
-			Annotations: map[string]string {
+			Name:      "source",
+			Annotations: map[string]string{
 				ExposeAnnotation.Key: ExposeAnnotation.Value,
 			},
 			ResourceVersion: "1",
@@ -290,10 +291,10 @@ func TestIngressStrategy_Add(t *testing.T) {
 			}},
 		},
 	}
-	objects := []runtime.Object{service, &v1beta1.Ingress{
+	objects := []runtime.Object{service, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress1",
+			Name:      "ingress1",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -307,10 +308,10 @@ func TestIngressStrategy_Add(t *testing.T) {
 			}},
 			ResourceVersion: "2",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress2",
+			Name:      "ingress2",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -324,10 +325,10 @@ func TestIngressStrategy_Add(t *testing.T) {
 			}},
 			ResourceVersion: "3",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress3",
+			Name:      "ingress3",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -341,10 +342,10 @@ func TestIngressStrategy_Add(t *testing.T) {
 			}},
 			ResourceVersion: "4",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "ingress4",
+			Name:      "ingress4",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -362,10 +363,10 @@ func TestIngressStrategy_Add(t *testing.T) {
 			}},
 			ResourceVersion: "5",
 		},
-	}, &v1beta1.Ingress{
+	}, &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "source",
+			Name:      "source",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -383,12 +384,12 @@ func TestIngressStrategy_Add(t *testing.T) {
 	client := fake.NewSimpleClientset(objects...)
 
 	strategy := IngressStrategy{
-		client:         client,
-		namespace:      "main",
-		domain:         "my-domain.com",
-		urltemplate:    "%[1]s.%[2]s.%[3]s",
+		client:      client,
+		namespace:   "main",
+		domain:      "my-domain.com",
+		urltemplate: "%[1]s.%[2]s.%[3]s",
 		existing: map[string][]string{
-			"main/source": []string{
+			"main/source": {
 				"ingress1",
 				"ingress2",
 				"ingress3",
@@ -401,7 +402,8 @@ func TestIngressStrategy_Add(t *testing.T) {
 	require.NoError(t, err)
 
 	found := map[string]bool{}
-	list, err := client.ExtensionsV1beta1().Ingresses("").List(metav1.ListOptions{})
+	ctx := context.Background()
+	list, err := client.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if assert.NoError(t, err) {
 		for _, ingress := range list.Items {
 			found[ingress.Name] = true
@@ -410,16 +412,17 @@ func TestIngressStrategy_Add(t *testing.T) {
 	expectedF := map[string]bool{
 		"ingress2": true,
 		"ingress3": true,
-		"source": true,
+		"source":   true,
 	}
 	assert.Equal(t, expectedF, found, "found ingresses")
 
-	ingress, err := client.ExtensionsV1beta1().Ingresses("main").Get("source", metav1.GetOptions{})
+	ingress, err := client.NetworkingV1().Ingresses("main").Get(ctx, "source", metav1.GetOptions{})
 	if assert.NoError(t, err, "get ingress") {
-		expectedI := &v1beta1.Ingress{
+		pathTypeImplementationSpecific := networkingv1.PathTypeImplementationSpecific
+		expectedI := &networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "source",
+				Name:      "source",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -433,17 +436,19 @@ func TestIngressStrategy_Add(t *testing.T) {
 				}},
 				ResourceVersion: "6",
 			},
-			Spec: v1beta1.IngressSpec{
-				Rules: []v1beta1.IngressRule{{
+			Spec: networkingv1.IngressSpec{
+				Rules: []networkingv1.IngressRule{{
 					Host: "source.main.my-domain.com",
-					IngressRuleValue: v1beta1.IngressRuleValue{
-						HTTP: &v1beta1.HTTPIngressRuleValue{
-							Paths: []v1beta1.HTTPIngressPath{{
-								Backend: v1beta1.IngressBackend{
-									ServiceName: "source",
-									ServicePort: intstr.FromInt(1234),
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{{
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "source",
+										Port: networkingv1.ServiceBackendPort{Number: 1234}},
 								},
-								Path: "",
+								Path:     "",
+								PathType: &pathTypeImplementationSpecific,
 							}},
 						},
 					},
@@ -453,15 +458,15 @@ func TestIngressStrategy_Add(t *testing.T) {
 		assert.Equalf(t, expectedI, ingress, "ingress")
 	}
 
-	service, err = client.CoreV1().Services("main").Get("source", metav1.GetOptions{})
+	service, err = client.CoreV1().Services("main").Get(ctx, "source", metav1.GetOptions{})
 	if assert.NoError(t, err, "get service") {
 		expectedS := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "source",
-				Annotations: map[string]string {
+				Name:      "source",
+				Annotations: map[string]string{
 					ExposeAnnotation.Key: ExposeAnnotation.Value,
-					ExposeAnnotationKey: "http://source.main.my-domain.com",
+					ExposeAnnotationKey:  "http://source.main.my-domain.com",
 				},
 				ResourceVersion: "1",
 			},
@@ -480,17 +485,17 @@ func TestIngressStrategy_Clean(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns1",
-				Name: "svc1",
+				Name:      "svc1",
 				Annotations: map[string]string{
 					ExposeAnnotationKey: "url",
-					"other": "other",
+					"other":             "other",
 				},
 			},
 		},
-		&v1beta1.Ingress{
+		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns1",
-				Name: "ingress1",
+				Name:      "ingress1",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -504,10 +509,10 @@ func TestIngressStrategy_Clean(t *testing.T) {
 				}},
 			},
 		},
-		&v1beta1.Ingress{
+		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns1",
-				Name: "ingress2",
+				Name:      "ingress2",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -521,10 +526,10 @@ func TestIngressStrategy_Clean(t *testing.T) {
 				}},
 			},
 		},
-		&v1beta1.Ingress{
+		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns1",
-				Name: "ingress3",
+				Name:      "ingress3",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -533,10 +538,10 @@ func TestIngressStrategy_Clean(t *testing.T) {
 				},
 			},
 		},
-		&v1beta1.Ingress{
+		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns1",
-				Name: "ingress4",
+				Name:      "ingress4",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -550,10 +555,10 @@ func TestIngressStrategy_Clean(t *testing.T) {
 				}},
 			},
 		},
-		&v1beta1.Ingress{
+		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns1",
-				Name: "ingress5",
+				Name:      "ingress5",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -567,10 +572,10 @@ func TestIngressStrategy_Clean(t *testing.T) {
 				}},
 			},
 		},
-		&v1beta1.Ingress{
+		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns1",
-				Name: "ingress6",
+				Name:      "ingress6",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -584,10 +589,10 @@ func TestIngressStrategy_Clean(t *testing.T) {
 				}},
 			},
 		},
-		&v1beta1.Ingress{
+		&networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "ns2",
-				Name: "ingress7",
+				Name:      "ingress7",
 				Labels: map[string]string{
 					"provider": "fabric8",
 				},
@@ -607,17 +612,17 @@ func TestIngressStrategy_Clean(t *testing.T) {
 	strategy := IngressStrategy{
 		client: client,
 		existing: map[string][]string{
-			"ns1/svc1": []string{
+			"ns1/svc1": {
 				"ingress1",
 				"ingress2",
 				"ingress3",
 				"ingress4",
 				"ingress5",
 			},
-			"ns2/svc2": []string{
+			"ns2/svc2": {
 				"ingress7",
 			},
-			"ns3/svc3": []string{
+			"ns3/svc3": {
 				"other",
 			},
 		},
@@ -626,7 +631,7 @@ func TestIngressStrategy_Clean(t *testing.T) {
 	err := strategy.Clean(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns1",
-			Name: "svc1",
+			Name:      "svc1",
 			Annotations: map[string]string{
 				ExposeAnnotationKey: "url",
 			},
@@ -636,12 +641,13 @@ func TestIngressStrategy_Clean(t *testing.T) {
 	err = strategy.Clean(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns2",
-			Name: "svc2",
+			Name:      "svc2",
 		},
 	})
 	assert.NoError(t, err, "clean svc2")
 
-	list, err := client.ExtensionsV1beta1().Ingresses("").List(metav1.ListOptions{})
+	ctx := context.Background()
+	list, err := client.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if assert.NoError(t, err, "get ingresses") {
 		found := map[string]bool{}
 		for _, ingress := range list.Items {
@@ -655,7 +661,7 @@ func TestIngressStrategy_Clean(t *testing.T) {
 		assert.Equal(t, expectedF, found, "ingresses")
 	}
 	expectedE := map[string][]string{
-		"ns3/svc3": []string{
+		"ns3/svc3": {
 			"other",
 		},
 	}
@@ -666,12 +672,12 @@ func TestIngressStrategy_IngressTLSAcme(t *testing.T) {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "my-service",
-			Annotations: map[string]string {
+			Name:      "my-service",
+			Annotations: map[string]string{
 				ExposeAnnotation.Key: ExposeAnnotation.Value,
 			},
 			ResourceVersion: "1",
-			UID: "my-service-uid",
+			UID:             "my-service-uid",
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{{
@@ -685,7 +691,7 @@ func TestIngressStrategy_IngressTLSAcme(t *testing.T) {
 	}
 	client := fake.NewSimpleClientset(service)
 
-	strategy, err := NewIngressStrategy(client, &Config{
+	strategy, err := NewIngressStrategy(nil, client, &Config{
 		Exposer:        "ingress",
 		Namespace:      "main",
 		NamePrefix:     "prefix",
@@ -701,18 +707,19 @@ func TestIngressStrategy_IngressTLSAcme(t *testing.T) {
 	err = strategy.Add(service)
 	require.NoError(t, err)
 
-	service, err = client.CoreV1().Services("main").Get("my-service", metav1.GetOptions{})
+	ctx := context.Background()
+	service, err = client.CoreV1().Services("main").Get(ctx, "my-service", metav1.GetOptions{})
 	if assert.NoError(t, err, "get service") {
 		expectedS := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "my-service",
-				Annotations: map[string]string {
+				Name:      "my-service",
+				Annotations: map[string]string{
 					ExposeAnnotation.Key: ExposeAnnotation.Value,
-					ExposeAnnotationKey: "https://my-service-main.my-domain.com",
+					ExposeAnnotationKey:  "https://my-service-main.my-domain.com",
 				},
 				ResourceVersion: "1",
-				UID: "my-service-uid",
+				UID:             "my-service-uid",
 			},
 			Spec: v1.ServiceSpec{
 				Ports: []v1.ServicePort{{
@@ -727,20 +734,21 @@ func TestIngressStrategy_IngressTLSAcme(t *testing.T) {
 		assert.Equalf(t, expectedS, service, "service")
 	}
 
-	ingress, err := client.ExtensionsV1beta1().Ingresses("main").Get("prefix-my-service", metav1.GetOptions{})
+	ingress, err := client.NetworkingV1().Ingresses("main").Get(ctx, "prefix-my-service", metav1.GetOptions{})
 	if assert.NoError(t, err, "get ingress") {
-		expectedI := &v1beta1.Ingress{
+		pathTypeImplementationSpecific := networkingv1.PathTypeImplementationSpecific
+		expectedI := &networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "prefix-my-service",
-				Labels:      map[string]string{
+				Name:      "prefix-my-service",
+				Labels: map[string]string{
 					"provider": "fabric8",
 				},
-				Annotations: map[string]string {
-					"fabric8.io/generated-by": "exposecontroller",
-					"kubernetes.io/ingress.class": "myIngressClass",
+				Annotations: map[string]string{
+					"fabric8.io/generated-by":                   "exposecontroller",
+					"kubernetes.io/ingress.class":               "myIngressClass",
 					"nginx.ingress.kubernetes.io/ingress.class": "myIngressClass",
-					"kubernetes.io/tls-acme": "true",
+					"kubernetes.io/tls-acme":                    "true",
 				},
 				OwnerReferences: []metav1.OwnerReference{{
 					APIVersion: "v1",
@@ -749,22 +757,24 @@ func TestIngressStrategy_IngressTLSAcme(t *testing.T) {
 					UID:        "my-service-uid",
 				}},
 			},
-			Spec: v1beta1.IngressSpec{
-				Rules: []v1beta1.IngressRule{{
+			Spec: networkingv1.IngressSpec{
+				Rules: []networkingv1.IngressRule{{
 					Host: "my-service-main.my-domain.com",
-					IngressRuleValue: v1beta1.IngressRuleValue{
-						HTTP: &v1beta1.HTTPIngressRuleValue{
-							Paths: []v1beta1.HTTPIngressPath{{
-								Backend: v1beta1.IngressBackend{
-									ServiceName: "my-service",
-									ServicePort: intstr.FromInt(123),
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{{
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "my-service",
+										Port: networkingv1.ServiceBackendPort{Number: 123}},
 								},
-								Path: "",
+								Path:     "",
+								PathType: &pathTypeImplementationSpecific,
 							}},
 						},
 					},
 				}},
-				TLS: []v1beta1.IngressTLS{{
+				TLS: []networkingv1.IngressTLS{{
 					Hosts:      []string{"my-service-main.my-domain.com"},
 					SecretName: "tls-my-service",
 				}},
@@ -778,15 +788,15 @@ func TestIngressStrategy_IngressTLSSecretName(t *testing.T) {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "my-service",
-			Labels: map[string]string {
+			Name:      "my-service",
+			Labels: map[string]string{
 				"release": "my",
 			},
-			Annotations: map[string]string {
+			Annotations: map[string]string{
 				ExposeAnnotation.Key: ExposeAnnotation.Value,
 			},
 			ResourceVersion: "1",
-			UID: "my-service-uid",
+			UID:             "my-service-uid",
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{{
@@ -800,7 +810,7 @@ func TestIngressStrategy_IngressTLSSecretName(t *testing.T) {
 	}
 	client := fake.NewSimpleClientset(service)
 
-	strategy, err := NewIngressStrategy(client, &Config{
+	strategy, err := NewIngressStrategy(nil, client, &Config{
 		Exposer:        "ingress",
 		Namespace:      "main",
 		Domain:         "my-domain.com",
@@ -816,21 +826,22 @@ func TestIngressStrategy_IngressTLSSecretName(t *testing.T) {
 	err = strategy.Add(service)
 	require.NoError(t, err)
 
-	service, err = client.CoreV1().Services("main").Get("my-service", metav1.GetOptions{})
+	ctx := context.Background()
+	service, err = client.CoreV1().Services("main").Get(ctx, "my-service", metav1.GetOptions{})
 	if assert.NoError(t, err, "get service") {
 		expectedS := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "my-service",
-				Labels: map[string]string {
+				Name:      "my-service",
+				Labels: map[string]string{
 					"release": "my",
 				},
-				Annotations: map[string]string {
+				Annotations: map[string]string{
 					ExposeAnnotation.Key: ExposeAnnotation.Value,
-					ExposeAnnotationKey: "https://my-domain.com/main/service/",
+					ExposeAnnotationKey:  "https://my-domain.com/main/service/",
 				},
 				ResourceVersion: "1",
-				UID: "my-service-uid",
+				UID:             "my-service-uid",
 			},
 			Spec: v1.ServiceSpec{
 				Ports: []v1.ServicePort{{
@@ -845,18 +856,19 @@ func TestIngressStrategy_IngressTLSSecretName(t *testing.T) {
 		assert.Equalf(t, expectedS, service, "service")
 	}
 
-	ingress, err := client.ExtensionsV1beta1().Ingresses("main").Get("service", metav1.GetOptions{})
+	ingress, err := client.NetworkingV1().Ingresses("main").Get(ctx, "service", metav1.GetOptions{})
 	if assert.NoError(t, err, "get ingress") {
-		expectedI := &v1beta1.Ingress{
+		pathTypeImplementationSpecific := networkingv1.PathTypeImplementationSpecific
+		expectedI := &networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "service",
-				Labels:      map[string]string{
+				Name:      "service",
+				Labels: map[string]string{
 					"provider": "fabric8",
 				},
-				Annotations: map[string]string {
-					"fabric8.io/generated-by": "exposecontroller",
-					"kubernetes.io/ingress.class": "nginx",
+				Annotations: map[string]string{
+					"fabric8.io/generated-by":                   "exposecontroller",
+					"kubernetes.io/ingress.class":               "nginx",
 					"nginx.ingress.kubernetes.io/ingress.class": "nginx",
 				},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -866,22 +878,24 @@ func TestIngressStrategy_IngressTLSSecretName(t *testing.T) {
 					UID:        "my-service-uid",
 				}},
 			},
-			Spec: v1beta1.IngressSpec{
-				Rules: []v1beta1.IngressRule{{
+			Spec: networkingv1.IngressSpec{
+				Rules: []networkingv1.IngressRule{{
 					Host: "my-domain.com",
-					IngressRuleValue: v1beta1.IngressRuleValue{
-						HTTP: &v1beta1.HTTPIngressRuleValue{
-							Paths: []v1beta1.HTTPIngressPath{{
-								Backend: v1beta1.IngressBackend{
-									ServiceName: "my-service",
-									ServicePort: intstr.FromInt(123),
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{{
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "my-service",
+										Port: networkingv1.ServiceBackendPort{Number: 123}},
 								},
-								Path: "/main/service/",
+								Path:     "/main/service/",
+								PathType: &pathTypeImplementationSpecific,
 							}},
 						},
 					},
 				}},
-				TLS: []v1beta1.IngressTLS{{
+				TLS: []networkingv1.IngressTLS{{
 					Hosts:      []string{"*.my-domain.com"},
 					SecretName: "my-tls-secret",
 				}},
@@ -908,20 +922,20 @@ func TestIngressStrategy_IngressAnnotations(t *testing.T) {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name: "my-service",
-			Annotations: map[string]string {
-				ExposeAnnotation.Key: ExposeAnnotation.Value,
-				"fabric8.io/ingress.name": "my-ingress",
-				"fabric8.io/host.name": "my-hostname",
+			Name:      "my-service",
+			Annotations: map[string]string{
+				ExposeAnnotation.Key:             ExposeAnnotation.Value,
+				"fabric8.io/ingress.name":        "my-ingress",
+				"fabric8.io/host.name":           "my-hostname",
 				"fabric8.io/use.internal.domain": "true",
-				"fabric8.io/ingress.path": "my/path",
-				"fabric8.io/path.mode": "other",
-				ExposePortAnnotationKey: "456",
-				ExposeHostNameAsAnnotationKey: "my-exposed-hostname",
+				"fabric8.io/ingress.path":        "my/path",
+				"fabric8.io/path.mode":           "other",
+				ExposePortAnnotationKey:          "456",
+				ExposeHostNameAsAnnotationKey:    "my-exposed-hostname",
 				"fabric8.io/ingress.annotations": testIngressAnnotations,
 			},
 			ResourceVersion: "1",
-			UID: "my-service-uid",
+			UID:             "my-service-uid",
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{{
@@ -935,7 +949,7 @@ func TestIngressStrategy_IngressAnnotations(t *testing.T) {
 	}
 	client := fake.NewSimpleClientset(service)
 
-	strategy, err := NewIngressStrategy(client, &Config{
+	strategy, err := NewIngressStrategy(nil, client, &Config{
 		Exposer:        "ingress",
 		Namespace:      "main",
 		Domain:         "my-domain.com",
@@ -950,28 +964,29 @@ func TestIngressStrategy_IngressAnnotations(t *testing.T) {
 	err = strategy.Add(service)
 	require.NoError(t, err)
 
-	service, err = client.CoreV1().Services("main").Get("my-service", metav1.GetOptions{})
+	ctx := context.Background()
+	service, err = client.CoreV1().Services("main").Get(ctx, "my-service", metav1.GetOptions{})
 	if assert.NoError(t, err, "get service") {
 		expectedS := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "my-service",
-				Annotations: map[string]string {
-					ExposeAnnotation.Key: ExposeAnnotation.Value,
-					"fabric8.io/ingress.name": "my-ingress",
-					"fabric8.io/host.name": "my-hostname",
+				Name:      "my-service",
+				Annotations: map[string]string{
+					ExposeAnnotation.Key:             ExposeAnnotation.Value,
+					"fabric8.io/ingress.name":        "my-ingress",
+					"fabric8.io/host.name":           "my-hostname",
 					"fabric8.io/use.internal.domain": "true",
-					"fabric8.io/ingress.path": "my/path",
-					"fabric8.io/path.mode": "other",
-					ExposePortAnnotationKey: "456",
-					ExposeHostNameAsAnnotationKey: "my-exposed-hostname",
+					"fabric8.io/ingress.path":        "my/path",
+					"fabric8.io/path.mode":           "other",
+					ExposePortAnnotationKey:          "456",
+					ExposeHostNameAsAnnotationKey:    "my-exposed-hostname",
 					"fabric8.io/ingress.annotations": testIngressAnnotations,
 
 					"my-exposed-hostname": "main.my-hostname.my-internal-domain.com",
-					ExposeAnnotationKey: "http://main.my-hostname.my-internal-domain.com/my/path",
+					ExposeAnnotationKey:   "http://main.my-hostname.my-internal-domain.com/my/path",
 				},
 				ResourceVersion: "1",
-				UID: "my-service-uid",
+				UID:             "my-service-uid",
 			},
 			Spec: v1.ServiceSpec{
 				Ports: []v1.ServicePort{{
@@ -986,21 +1001,22 @@ func TestIngressStrategy_IngressAnnotations(t *testing.T) {
 		assert.Equalf(t, expectedS, service, "service")
 	}
 
-	ingress, err := client.ExtensionsV1beta1().Ingresses("main").Get("my-ingress", metav1.GetOptions{})
+	ingress, err := client.NetworkingV1().Ingresses("main").Get(ctx, "my-ingress", metav1.GetOptions{})
 	if assert.NoError(t, err, "get ingress") {
-		expectedI := &v1beta1.Ingress{
+		pathTypeImplementationSpecific := networkingv1.PathTypeImplementationSpecific
+		expectedI := &networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name: "my-ingress",
-				Labels:      map[string]string{
+				Name:      "my-ingress",
+				Labels: map[string]string{
 					"provider": "fabric8",
 				},
-				Annotations: map[string]string {
-					"fabric8.io/generated-by": "exposecontroller",
-					"kubernetes.io/ingress.class": "other",
+				Annotations: map[string]string{
+					"fabric8.io/generated-by":                   "exposecontroller",
+					"kubernetes.io/ingress.class":               "other",
 					"nginx.ingress.kubernetes.io/ingress.class": "my-class",
-					"sentence": "sentence with spaces",
-					"quoted": " quoted sentence ",
+					"sentence":  "sentence with spaces",
+					"quoted":    " quoted sentence ",
 					"multiline": "multi line\nsentence",
 				},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -1010,17 +1026,19 @@ func TestIngressStrategy_IngressAnnotations(t *testing.T) {
 					UID:        "my-service-uid",
 				}},
 			},
-			Spec: v1beta1.IngressSpec{
-				Rules: []v1beta1.IngressRule{{
+			Spec: networkingv1.IngressSpec{
+				Rules: []networkingv1.IngressRule{{
 					Host: "main.my-hostname.my-internal-domain.com",
-					IngressRuleValue: v1beta1.IngressRuleValue{
-						HTTP: &v1beta1.HTTPIngressRuleValue{
-							Paths: []v1beta1.HTTPIngressPath{{
-								Backend: v1beta1.IngressBackend{
-									ServiceName: "my-service",
-									ServicePort: intstr.FromInt(456),
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{{
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: "my-service",
+										Port: networkingv1.ServiceBackendPort{Number: 456}},
 								},
-								Path: "/my/path",
+								Path:     "/my/path",
+								PathType: &pathTypeImplementationSpecific,
 							}},
 						},
 					},
@@ -1035,8 +1053,8 @@ func TestIngressStrategy_update(t *testing.T) {
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "svc",
-			Annotations: map[string]string {
+			Name:      "svc",
+			Annotations: map[string]string{
 				ExposeAnnotation.Key: ExposeAnnotation.Value,
 			},
 		},
@@ -1049,11 +1067,11 @@ func TestIngressStrategy_update(t *testing.T) {
 		},
 	}
 	client := fake.NewSimpleClientset(svc)
-	strategy, err := NewIngressStrategy(client, &Config{
-		Exposer:        "ingress",
-		Namespace:      "main",
-		Domain:         "my-domain.com",
-		URLTemplate:    "{{.Service}}.{{.Namespace}}.{{.Domain}}",
+	strategy, err := NewIngressStrategy(nil, client, &Config{
+		Exposer:     "ingress",
+		Namespace:   "main",
+		Domain:      "my-domain.com",
+		URLTemplate: "{{.Service}}.{{.Namespace}}.{{.Domain}}",
 	})
 	require.NoError(t, err)
 	require.NoError(t, strategy.Sync())
@@ -1061,10 +1079,11 @@ func TestIngressStrategy_update(t *testing.T) {
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
 
-	expected := &v1beta1.Ingress{
+	pathTypeImplementationSpecific := networkingv1.PathTypeImplementationSpecific
+	expected := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "svc",
+			Name:      "svc",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -1077,17 +1096,19 @@ func TestIngressStrategy_update(t *testing.T) {
 				Name:       "svc",
 			}},
 		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{{
 				Host: "svc.ns.my-domain.com",
-				IngressRuleValue: v1beta1.IngressRuleValue{
-					HTTP: &v1beta1.HTTPIngressRuleValue{
-						Paths: []v1beta1.HTTPIngressPath{{
-							Backend: v1beta1.IngressBackend{
-								ServiceName: "svc",
-								ServicePort: intstr.FromInt(1234),
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "svc",
+									Port: networkingv1.ServiceBackendPort{Number: 1234}},
 							},
-							Path: "",
+							Path:     "",
+							PathType: &pathTypeImplementationSpecific,
 						}},
 					},
 				},
@@ -1095,7 +1116,8 @@ func TestIngressStrategy_update(t *testing.T) {
 		},
 	}
 
-	ingresses, err := client.ExtensionsV1beta1().Ingresses("ns").List(metav1.ListOptions{})
+	ctx := context.Background()
+	ingresses, err := client.NetworkingV1().Ingresses("ns").List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
 	if assert.Equal(t, 1, len(ingresses.Items)) {
 		assert.Equal(t, expected, &ingresses.Items[0])
@@ -1103,10 +1125,10 @@ func TestIngressStrategy_update(t *testing.T) {
 
 	expected.ResourceVersion = "1"
 	expected.UID = "test"
-	client.ExtensionsV1beta1().Ingresses("ns").Update(expected.DeepCopy())
+	client.NetworkingV1().Ingresses("ns").Update(ctx, expected.DeepCopy(), metav1.UpdateOptions{})
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
-	ingress, err := client.ExtensionsV1beta1().Ingresses("ns").Get(expected.Name, metav1.GetOptions{})
+	ingress, err := client.NetworkingV1().Ingresses("ns").Get(ctx, expected.Name, metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, expected, ingress)
 	}
@@ -1114,9 +1136,9 @@ func TestIngressStrategy_update(t *testing.T) {
 	svc = &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "svc",
-			Annotations: map[string]string {
-				ExposeAnnotation.Key: ExposeAnnotation.Value,
+			Name:      "svc",
+			Annotations: map[string]string{
+				ExposeAnnotation.Key:    ExposeAnnotation.Value,
 				ExposePortAnnotationKey: "5678",
 			},
 		},
@@ -1131,12 +1153,12 @@ func TestIngressStrategy_update(t *testing.T) {
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
 
-	ingresses, err = client.ExtensionsV1beta1().Ingresses("ns").List(metav1.ListOptions{})
+	ingresses, err = client.NetworkingV1().Ingresses("ns").List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
-	expected = &v1beta1.Ingress{
+	expected = &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "svc",
+			Name:      "svc",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -1150,17 +1172,19 @@ func TestIngressStrategy_update(t *testing.T) {
 			}},
 			ResourceVersion: "1",
 		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{{
 				Host: "svc.ns.my-domain.com",
-				IngressRuleValue: v1beta1.IngressRuleValue{
-					HTTP: &v1beta1.HTTPIngressRuleValue{
-						Paths: []v1beta1.HTTPIngressPath{{
-							Backend: v1beta1.IngressBackend{
-								ServiceName: "svc",
-								ServicePort: intstr.FromInt(5678),
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "svc",
+									Port: networkingv1.ServiceBackendPort{Number: 5678}},
 							},
-							Path: "",
+							Path:     "",
+							PathType: &pathTypeImplementationSpecific,
 						}},
 					},
 				},
@@ -1173,10 +1197,10 @@ func TestIngressStrategy_update(t *testing.T) {
 
 	expected.ResourceVersion = "2"
 	expected.UID = "test"
-	client.ExtensionsV1beta1().Ingresses("ns").Update(expected.DeepCopy())
+	client.NetworkingV1().Ingresses("ns").Update(ctx, expected.DeepCopy(), metav1.UpdateOptions{})
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
-	ingress, err = client.ExtensionsV1beta1().Ingresses("ns").Get(expected.Name, metav1.GetOptions{})
+	ingress, err = client.NetworkingV1().Ingresses("ns").Get(ctx, expected.Name, metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, expected, ingress)
 	}
@@ -1184,10 +1208,10 @@ func TestIngressStrategy_update(t *testing.T) {
 	svc = &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "svc",
-			Annotations: map[string]string {
-				ExposeAnnotation.Key: ExposeAnnotation.Value,
-				ExposePortAnnotationKey: "5678",
+			Name:      "svc",
+			Annotations: map[string]string{
+				ExposeAnnotation.Key:      ExposeAnnotation.Value,
+				ExposePortAnnotationKey:   "5678",
 				"fabric8.io/ingress.name": "ingress",
 			},
 		},
@@ -1202,12 +1226,12 @@ func TestIngressStrategy_update(t *testing.T) {
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
 
-	ingresses, err = client.ExtensionsV1beta1().Ingresses("ns").List(metav1.ListOptions{})
+	ingresses, err = client.NetworkingV1().Ingresses("ns").List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
-	expected = &v1beta1.Ingress{
+	expected = &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "ingress",
+			Name:      "ingress",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
@@ -1220,17 +1244,19 @@ func TestIngressStrategy_update(t *testing.T) {
 				Name:       "svc",
 			}},
 		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{{
 				Host: "ingress.ns.my-domain.com",
-				IngressRuleValue: v1beta1.IngressRuleValue{
-					HTTP: &v1beta1.HTTPIngressRuleValue{
-						Paths: []v1beta1.HTTPIngressPath{{
-							Backend: v1beta1.IngressBackend{
-								ServiceName: "svc",
-								ServicePort: intstr.FromInt(5678),
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "svc",
+									Port: networkingv1.ServiceBackendPort{Number: 5678}},
 							},
-							Path: "",
+							Path:     "",
+							PathType: &pathTypeImplementationSpecific,
 						}},
 					},
 				},
@@ -1243,10 +1269,10 @@ func TestIngressStrategy_update(t *testing.T) {
 
 	expected.ResourceVersion = "3"
 	expected.UID = "test"
-	client.ExtensionsV1beta1().Ingresses("ns").Update(expected.DeepCopy())
+	client.NetworkingV1().Ingresses("ns").Update(ctx, expected.DeepCopy(), metav1.UpdateOptions{})
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
-	ingress, err = client.ExtensionsV1beta1().Ingresses("ns").Get(expected.Name, metav1.GetOptions{})
+	ingress, err = client.NetworkingV1().Ingresses("ns").Get(ctx, expected.Name, metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, expected, ingress)
 	}
@@ -1254,11 +1280,11 @@ func TestIngressStrategy_update(t *testing.T) {
 	svc = &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "svc",
-			Annotations: map[string]string {
-				ExposeAnnotation.Key: ExposeAnnotation.Value,
-				ExposePortAnnotationKey: "5678",
-				"fabric8.io/ingress.name": "ingress",
+			Name:      "svc",
+			Annotations: map[string]string{
+				ExposeAnnotation.Key:             ExposeAnnotation.Value,
+				ExposePortAnnotationKey:          "5678",
+				"fabric8.io/ingress.name":        "ingress",
 				"fabric8.io/ingress.annotations": "custom: \"true\"\n",
 			},
 		},
@@ -1273,18 +1299,18 @@ func TestIngressStrategy_update(t *testing.T) {
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
 
-	ingresses, err = client.ExtensionsV1beta1().Ingresses("ns").List(metav1.ListOptions{})
+	ingresses, err = client.NetworkingV1().Ingresses("ns").List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
-	expected = &v1beta1.Ingress{
+	expected = &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "ingress",
+			Name:      "ingress",
 			Labels: map[string]string{
 				"provider": "fabric8",
 			},
 			Annotations: map[string]string{
 				"fabric8.io/generated-by": "exposecontroller",
-				"custom": "true",
+				"custom":                  "true",
 			},
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion: "v1",
@@ -1293,17 +1319,19 @@ func TestIngressStrategy_update(t *testing.T) {
 			}},
 			ResourceVersion: "3",
 		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{{
 				Host: "ingress.ns.my-domain.com",
-				IngressRuleValue: v1beta1.IngressRuleValue{
-					HTTP: &v1beta1.HTTPIngressRuleValue{
-						Paths: []v1beta1.HTTPIngressPath{{
-							Backend: v1beta1.IngressBackend{
-								ServiceName: "svc",
-								ServicePort: intstr.FromInt(5678),
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "svc",
+									Port: networkingv1.ServiceBackendPort{Number: 5678}},
 							},
-							Path: "",
+							Path:     "",
+							PathType: &pathTypeImplementationSpecific,
 						}},
 					},
 				},
@@ -1316,10 +1344,10 @@ func TestIngressStrategy_update(t *testing.T) {
 
 	expected.ResourceVersion = "4"
 	expected.UID = "test"
-	client.ExtensionsV1beta1().Ingresses("ns").Update(expected.DeepCopy())
+	client.NetworkingV1().Ingresses("ns").Update(ctx, expected.DeepCopy(), metav1.UpdateOptions{})
 	err = strategy.Add(svc.DeepCopy())
 	require.NoError(t, err)
-	ingress, err = client.ExtensionsV1beta1().Ingresses("ns").Get(expected.Name, metav1.GetOptions{})
+	ingress, err = client.NetworkingV1().Ingresses("ns").Get(ctx, expected.Name, metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, expected, ingress)
 	}
@@ -1327,10 +1355,10 @@ func TestIngressStrategy_update(t *testing.T) {
 	svc = &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns",
-			Name: "svc",
-			Annotations: map[string]string {
-				ExposePortAnnotationKey: "5678",
-				"fabric8.io/ingress.name": "ingress",
+			Name:      "svc",
+			Annotations: map[string]string{
+				ExposePortAnnotationKey:          "5678",
+				"fabric8.io/ingress.name":        "ingress",
 				"fabric8.io/ingress.annotations": "custom: \"true\"\n",
 			},
 		},
@@ -1345,7 +1373,7 @@ func TestIngressStrategy_update(t *testing.T) {
 	err = strategy.Clean(svc.DeepCopy())
 	require.NoError(t, err)
 
-	ingresses, err = client.ExtensionsV1beta1().Ingresses("ns").List(metav1.ListOptions{})
+	ingresses, err = client.NetworkingV1().Ingresses("ns").List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(ingresses.Items))
 }

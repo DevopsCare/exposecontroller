@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"k8s.io/client-go/tools/clientcmd"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -19,7 +21,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -60,6 +61,7 @@ func init() {
 
 func main() {
 	flag.Parse()
+	ctx := context.Background()
 
 	var restClientConfig *rest.Config
 	var err error
@@ -98,10 +100,10 @@ func main() {
 			klog.Warningf("failed to load config file: %s", err)
 		}
 
-		cc2 := tryFindConfig(kubeClient, currentNamespace)
+		cc2 := tryFindConfig(ctx, kubeClient, currentNamespace)
 		if cc2 == nil {
-			// lets try find the ConfigMap in the dev namespace
-			resource, err := kubeClient.CoreV1().Namespaces().Get(currentNamespace, metav1.GetOptions{})
+			// let's try to find the ConfigMap in the dev namespace
+			resource, err := kubeClient.CoreV1().Namespaces().Get(ctx, currentNamespace, metav1.GetOptions{})
 			if err == nil && resource != nil {
 				labels := resource.Labels
 				if labels != nil {
@@ -111,7 +113,7 @@ func main() {
 					} else {
 						klog.Infof("trying to find the ConfigMap in the Dev Namespace %s", ns)
 
-						cc2 = tryFindConfig(kubeClient, ns)
+						cc2 = tryFindConfig(ctx, kubeClient, ns)
 					}
 				} else {
 					klog.Warningf("No labels on Namespace %s", currentNamespace)
@@ -119,11 +121,11 @@ func main() {
 			} else {
 				klog.Warningf("Failed to load Namespace %s: %s", currentNamespace, err)
 
-				// lets try default to trimming the lasts path from the current namespace
+				// let's try default to trim the lasts path from the current namespace
 				idx := strings.LastIndex(currentNamespace, "-")
 				if idx > 1 {
 					ns := currentNamespace[0:idx]
-					cc2 = tryFindConfig(kubeClient, ns)
+					cc2 = tryFindConfig(ctx, kubeClient, ns)
 				}
 			}
 		}
@@ -169,7 +171,7 @@ func main() {
 	}
 
 	if *cleanup {
-		err = exposestrategy.CleanIngressStrategy(kubeClient, watchNamespaces)
+		err = exposestrategy.CleanIngressStrategy(ctx, kubeClient, watchNamespaces)
 		if err != nil {
 			klog.Fatalf("Could not clean: %v", err)
 		}
@@ -178,7 +180,7 @@ func main() {
 
 	if *daemon {
 		klog.Infof("Watching services in namespaces: `%s`", watchNamespaces)
-		contr, err := controller.Daemon(kubeClient, watchNamespaces, controllerConfig, *resyncPeriod)
+		contr, err := controller.Daemon(ctx, kubeClient, watchNamespaces, controllerConfig, *resyncPeriod)
 		if err == nil {
 			go registerHandlers(contr)
 			contr.Run(wait.NeverStop)
@@ -187,7 +189,7 @@ func main() {
 		}
 	} else {
 		klog.Infof("Running in : `%s`", watchNamespaces)
-		err = controller.Run(kubeClient, watchNamespaces, controllerConfig, *timeout)
+		err = controller.Run(ctx, kubeClient, watchNamespaces, controllerConfig, *timeout)
 	}
 
 	if err != nil {
@@ -195,9 +197,9 @@ func main() {
 	}
 }
 
-func tryFindConfig(kubeClient kubernetes.Interface, ns string) *controller.Config {
+func tryFindConfig(ctx context.Context, kubeClient kubernetes.Interface, ns string) *controller.Config {
 	var controllerConfig *controller.Config
-	cm, err := kubeClient.CoreV1().ConfigMaps(ns).Get("exposecontroller", metav1.GetOptions{})
+	cm, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, "exposecontroller", metav1.GetOptions{})
 	if err == nil {
 		klog.Infof("Using ConfigMap exposecontroller to load configuration...")
 		// TODO we could allow the config to be passed in via key/value pairs?
@@ -212,7 +214,7 @@ func tryFindConfig(kubeClient kubernetes.Interface, ns string) *controller.Confi
 	} else {
 		klog.Warningf("Could not find ConfigMap exposecontroller ConfigMap in namespace %s: %s", ns, err)
 
-		cm, err = kubeClient.CoreV1().ConfigMaps(ns).Get("ingress-config", metav1.GetOptions{})
+		cm, err = kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, "ingress-config", metav1.GetOptions{})
 		if err != nil {
 			klog.Warningf("Could not find ConfigMap ingress-config ConfigMap in namespace %s: %s", ns, err)
 		} else {

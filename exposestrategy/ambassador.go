@@ -2,7 +2,9 @@ package exposestrategy
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strconv"
 	"strings"
 
@@ -20,7 +22,8 @@ import (
 
 // AmbassadorStrategy is a strategy that adds the ambassador annotations
 type AmbassadorStrategy struct {
-	client  kubernetes.Interface
+	ctx    context.Context
+	client kubernetes.Interface
 
 	domain        string
 	tlsSecretName string
@@ -31,11 +34,11 @@ type AmbassadorStrategy struct {
 }
 
 // NewAmbassadorStrategy creates a new AmbassadorStrategy
-func NewAmbassadorStrategy(client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
+func NewAmbassadorStrategy(ctx context.Context, client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
 
 	var err error
 	if config.Domain == "" {
-		config.Domain, err = getAutoDefaultDomain(client)
+		config.Domain, err = getAutoDefaultDomain(ctx, client)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get a domain")
 		}
@@ -50,6 +53,7 @@ func NewAmbassadorStrategy(client kubernetes.Interface, config *Config) (ExposeS
 	klog.Infof("Using url template [%s] format [%s]", config.URLTemplate, urlformat)
 
 	return &AmbassadorStrategy{
+		ctx:           ctx,
 		client:        client,
 		domain:        config.Domain,
 		http:          config.HTTP,
@@ -205,7 +209,7 @@ func (s *AmbassadorStrategy) Add(svc *v1.Service) error {
 	// patch the service
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(svc.Namespace).
-			Patch(svc.Name, patchType, patch)
+			Patch(s.ctx, svc.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "failed to send patch %s/%s",
 				svc.Namespace, svc.Name)
@@ -232,7 +236,7 @@ func (s *AmbassadorStrategy) Clean(svc *v1.Service) error {
 	// patch the service
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(svc.Namespace).
-			Patch(svc.Name, patchType, patch)
+			Patch(s.ctx, svc.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "failed to send patch %s/%s",
 				svc.Namespace, svc.Name)

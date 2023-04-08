@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"strings"
 
@@ -13,12 +14,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func rollingUpgradeDeployments(cm *v1.ConfigMap, c kubernetes.Interface) error {
+func rollingUpgradeDeployments(ctx context.Context, cm *v1.ConfigMap, c kubernetes.Interface) error {
 	ns := cm.Namespace
 	configMapName := cm.Name
 	configMapVersion := convertConfigMapToToken(cm)
 
-	deployments, err := c.ExtensionsV1beta1().Deployments(ns).List(metav1.ListOptions{})
+	deployments, err := c.ExtensionsV1beta1().Deployments(ns).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrap(err, "failed to list deployments")
 	}
@@ -39,7 +40,7 @@ func rollingUpgradeDeployments(cm *v1.ConfigMap, c kubernetes.Interface) error {
 				updateContainers(containers, annotationValue, configMapVersion)
 
 				// update the deployment
-				_, err := c.ExtensionsV1beta1().Deployments(ns).Update(&d)
+				_, err := c.ExtensionsV1beta1().Deployments(ns).Update(ctx, &d, metav1.UpdateOptions{})
 				if err != nil {
 					return errors.Wrap(err, "update deployment failed")
 				}
@@ -58,8 +59,8 @@ func convertConfigMapToToken(cm *v1.ConfigMap) string {
 	}
 	sort.Strings(values)
 	text := strings.Join(values, ";")
-	// we could zip and base64 encode
-	// but for now we could leave this easy to read so that its easier to diagnose when & why things changed
+	// we could zip and base64 encode,
+	// but for now we could leave this easy to read so that it's easier to diagnose when & why things changed
 	return text
 }
 

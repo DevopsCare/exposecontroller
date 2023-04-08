@@ -1,20 +1,20 @@
 package exposestrategy
 
 import (
+	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
-	"reflect"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"k8s.io/klog"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -29,7 +29,9 @@ const (
 
 // IngressStrategy is a strategy that creates ingresses for the services
 type IngressStrategy struct {
-	client         kubernetes.Interface
+	ctx    context.Context
+	client kubernetes.Interface
+
 	namespace      string
 	namePrefix     string
 	domain         string
@@ -45,11 +47,11 @@ type IngressStrategy struct {
 }
 
 // NewIngressStrategy creates a new NewIngressStrategy
-func NewIngressStrategy(client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
+func NewIngressStrategy(ctx context.Context, client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
 
 	var err error
 	if config.Domain == "" {
-		config.Domain, err = getAutoDefaultDomain(client)
+		config.Domain, err = getAutoDefaultDomain(ctx, client)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get a domain")
 		}
@@ -64,6 +66,7 @@ func NewIngressStrategy(client kubernetes.Interface, config *Config) (ExposeStra
 	klog.Infof("Using url template [%s] format [%s]", config.URLTemplate, urlformat)
 
 	return &IngressStrategy{
+		ctx:            ctx,
 		client:         client,
 		namespace:      config.Namespace,
 		namePrefix:     config.NamePrefix,
@@ -80,7 +83,7 @@ func NewIngressStrategy(client kubernetes.Interface, config *Config) (ExposeStra
 }
 
 // CleanIngressStrategy deletes all the ingresses created by the controller
-func CleanIngressStrategy(client kubernetes.Interface, namespace string) error {
+func CleanIngressStrategy(ctx context.Context, client kubernetes.Interface, namespace string) error {
 	// list all existing ingresses
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchLabels: map[string]string{"provider": "fabric8"},
@@ -91,7 +94,7 @@ func CleanIngressStrategy(client kubernetes.Interface, namespace string) error {
 	listOptions := metav1.ListOptions{
 		LabelSelector: selector.String(),
 	}
-	list, err := client.ExtensionsV1beta1().Ingresses(namespace).List(listOptions)
+	list, err := client.NetworkingV1().Ingresses(namespace).List(ctx, listOptions)
 	if err != nil {
 		return errors.Wrap(err, "failed to list ingresses")
 	}
@@ -100,7 +103,7 @@ func CleanIngressStrategy(client kubernetes.Interface, namespace string) error {
 		ingress := &list.Items[index]
 		svc, del := getIngressService(ingress)
 		if del || svc != "" {
-			deleteIngress(client, ingress)
+			deleteIngress(ctx, client, ingress)
 		}
 	}
 	return nil
@@ -114,12 +117,12 @@ func (s *IngressStrategy) Sync() error {
 		MatchLabels: map[string]string{"provider": "fabric8"},
 	})
 	if err != nil {
-		return  errors.Wrap(err, "failed to build selector")
+		return errors.Wrap(err, "failed to build selector")
 	}
 	listOptions := metav1.ListOptions{
 		LabelSelector: selector.String(),
 	}
-	list, err := s.client.ExtensionsV1beta1().Ingresses(s.namespace).List(listOptions)
+	list, err := s.client.NetworkingV1().Ingresses(s.namespace).List(s.ctx, listOptions)
 	if err != nil {
 		return errors.Wrap(err, "failed to list ingresses")
 	}
@@ -129,7 +132,7 @@ func (s *IngressStrategy) Sync() error {
 		ingress := &list.Items[index]
 		svc, del := getIngressService(ingress)
 		if del {
-			deleteIngress(s.client, ingress)
+			deleteIngress(nil, s.client, ingress)
 		} else if svc != "" {
 			existing[svc] = append(existing[svc], ingress.Name)
 		}
@@ -245,9 +248,9 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 		}
 	}
 
-	var tlsSpec []v1beta1.IngressTLS
+	var tlsSpec []networkingv1.IngressTLS
 	if tlsSecretName != "" {
-		tlsSpec = []v1beta1.IngressTLS{
+		tlsSpec = []networkingv1.IngressTLS{
 			{
 				Hosts:      []string{tlsHostName},
 				SecretName: tlsSecretName,
@@ -263,14 +266,15 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 				svc.Namespace, svc.Name)
 		}
 	}
-	// that annotations is important and cannot be overridden
+	// that annotation is important and cannot be overridden
 	ingressAnnotations["fabric8.io/generated-by"] = "exposecontroller"
+	pathTypeImplementationSpecific := networkingv1.PathTypeImplementationSpecific
 	// build the ingress
-	ingress := v1beta1.Ingress{
+	ingress := networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   svc.Namespace,
-			Name:        ingressName,
-			Labels:      map[string]string{
+			Namespace: svc.Namespace,
+			Name:      ingressName,
+			Labels: map[string]string{
 				"provider": "fabric8",
 			},
 			Annotations: ingressAnnotations,
@@ -281,17 +285,19 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 				UID:        svc.UID,
 			}},
 		},
-		Spec: v1beta1.IngressSpec{
-			Rules: []v1beta1.IngressRule{{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{{
 				Host: hostName,
-				IngressRuleValue: v1beta1.IngressRuleValue{
-					HTTP: &v1beta1.HTTPIngressRuleValue{
-						Paths: []v1beta1.HTTPIngressPath{{
-							Backend: v1beta1.IngressBackend{
-								ServiceName: svc.Name,
-								ServicePort: intstr.FromInt(servicePort),
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: svc.Name,
+									Port: networkingv1.ServiceBackendPort{Number: int32(servicePort)}},
 							},
-							Path: path,
+							Path:     path,
+							PathType: &pathTypeImplementationSpecific,
 						}},
 					},
 				},
@@ -300,16 +306,16 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 		},
 	}
 	// clean the old ingresses of the service if they have a different name
-	ingresses := s.client.ExtensionsV1beta1().Ingresses(svc.Namespace)
+	ingresses := s.client.NetworkingV1().Ingresses(svc.Namespace)
 	svcKey := fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
 
 	for _, name := range s.existing[svcKey] {
 		if name != ingress.Name {
-			existing, err := ingresses.Get(name, metav1.GetOptions{})
+			existing, err := ingresses.Get(s.ctx, name, metav1.GetOptions{})
 			if err == nil {
 				exKey, del := getIngressService(existing)
 				if del || exKey == svcKey {
-					deleteIngress(s.client, existing)
+					deleteIngress(nil, s.client, existing)
 				}
 			} else if !apierrors.IsNotFound(err) {
 				klog.Errorf("error when getting ingress %s/%s: %s",
@@ -319,14 +325,14 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 	}
 	s.existing[svcKey] = []string{ingress.Name}
 	// check for an existing ingress
-	existing, err := ingresses.Get(ingress.Name, metav1.GetOptions{})
+	existing, err := ingresses.Get(s.ctx, ingress.Name, metav1.GetOptions{})
 
 	if err == nil {
 		// if the ingress is the same in all points, no need to update
 		if reflect.DeepEqual(ingress.Labels, existing.Labels) &&
-		reflect.DeepEqual(ingress.Annotations, existing.Annotations) &&
-		reflect.DeepEqual(ingress.OwnerReferences, existing.OwnerReferences) &&
-		reflect.DeepEqual(ingress.Spec, existing.Spec) {
+			reflect.DeepEqual(ingress.Annotations, existing.Annotations) &&
+			reflect.DeepEqual(ingress.OwnerReferences, existing.OwnerReferences) &&
+			reflect.DeepEqual(ingress.Spec, existing.Spec) {
 			klog.Infof("ingress %s/%s already up to date for service %s/%s",
 				ingress.Namespace, ingress.Name, svc.Namespace, svc.Name)
 			return nil
@@ -341,12 +347,12 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 		ingress.Namespace, ingress.Name, svc.Namespace, svc.Name, s.http, pathMode, path)
 
 	if ingress.ResourceVersion == "" {
-		_, err := ingresses.Create(&ingress)
+		_, err := ingresses.Create(s.ctx, &ingress, metav1.CreateOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "failed to create ingress %s/%s", ingress.Namespace, ingress.Name)
 		}
 	} else {
-		_, err := ingresses.Update(&ingress)
+		_, err := ingresses.Update(s.ctx, &ingress, metav1.UpdateOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "failed to update ingress %s/%s", ingress.Namespace, ingress.Name)
 		}
@@ -371,7 +377,7 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 	// patch the service
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(svc.Namespace).
-			Patch(svc.Name, patchType, patch)
+			Patch(s.ctx, svc.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "failed to send patch %s/%s",
 				svc.Namespace, svc.Name)
@@ -387,11 +393,11 @@ func (s *IngressStrategy) Add(svc *v1.Service) error {
 func (s *IngressStrategy) Clean(svc *v1.Service) error {
 	svcKey := fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
 	for _, name := range s.existing[svcKey] {
-		existing, err := s.client.ExtensionsV1beta1().Ingresses(svc.Namespace).Get(name, metav1.GetOptions{})
+		existing, err := s.client.NetworkingV1().Ingresses(svc.Namespace).Get(s.ctx, name, metav1.GetOptions{})
 		if err == nil {
 			exKey, del := getIngressService(existing)
 			if del || exKey == svcKey {
-				deleteIngress(s.client, existing)
+				deleteIngress(nil, s.client, existing)
 			}
 		} else if !apierrors.IsNotFound(err) {
 			klog.Errorf("error when getting ingress %s/%s: %s",
@@ -413,7 +419,7 @@ func (s *IngressStrategy) Clean(svc *v1.Service) error {
 	// patch the service
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(svc.Namespace).
-			Patch(svc.Name, patchType, patch)
+			Patch(s.ctx, svc.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "failed to send patch %s/%s",
 				svc.Namespace, svc.Name)
@@ -427,11 +433,11 @@ func (s *IngressStrategy) Clean(svc *v1.Service) error {
 func (s *IngressStrategy) Delete(svc *v1.Service) error {
 	svcKey := fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
 	for _, name := range s.existing[svcKey] {
-		existing, err := s.client.ExtensionsV1beta1().Ingresses(svc.Namespace).Get(name, metav1.GetOptions{})
+		existing, err := s.client.NetworkingV1().Ingresses(svc.Namespace).Get(s.ctx, name, metav1.GetOptions{})
 		if err == nil {
 			exKey, del := getIngressService(existing)
 			if del || exKey == svcKey {
-				deleteIngress(s.client, existing)
+				deleteIngress(nil, s.client, existing)
 			}
 		} else if !apierrors.IsNotFound(err) {
 			klog.Errorf("error when getting ingress %s/%s: %s",
@@ -443,21 +449,21 @@ func (s *IngressStrategy) Delete(svc *v1.Service) error {
 	return nil
 }
 
-func deleteIngress(client kubernetes.Interface, ingress *v1beta1.Ingress) {
+func deleteIngress(ctx context.Context, client kubernetes.Interface, ingress *networkingv1.Ingress) {
 	options := metav1.DeleteOptions{
 		Preconditions: &metav1.Preconditions{
 			ResourceVersion: &ingress.ResourceVersion,
 		},
 	}
 	klog.Infof("cleaning the ingress %s/%s", ingress.Namespace, ingress.Name)
-	err := client.ExtensionsV1beta1().Ingresses(ingress.Namespace).Delete(ingress.Name, &options)
+	err := client.NetworkingV1().Ingresses(ingress.Namespace).Delete(ctx, ingress.Name, options)
 	if err != nil {
 		klog.Errorf("error when deleting ingress %s/%s: %s",
 			ingress.Namespace, ingress.Name, err)
 	}
 }
 
-func getIngressService(ingress *v1beta1.Ingress) (string, bool) {
+func getIngressService(ingress *networkingv1.Ingress) (string, bool) {
 	if ingress.Labels["provider"] != "fabric8" || ingress.Annotations["fabric8.io/generated-by"] != "exposecontroller" {
 		return "", false
 	} else if len(ingress.OwnerReferences) != 1 {

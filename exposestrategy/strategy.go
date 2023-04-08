@@ -1,6 +1,7 @@
 package exposestrategy
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -42,22 +43,23 @@ type label struct {
 
 var (
 	// ExposeLabel label tells that the service is exposed
-	ExposeLabel                   = label{Key: "expose", Value: "true"}
-	// ExposeAnnotation anotations tells that the service is exposed
-	ExposeAnnotation              = label{Key: "fabric8.io/expose", Value: "true"}
-	// InjectAnnotation anotations tells that the service is exposed
-	InjectAnnotation              = label{Key: "fabric8.io/inject", Value: "true"}
+	ExposeLabel = label{Key: "expose", Value: "true"}
+	// ExposeAnnotation annotation tells that the service is exposed
+	ExposeAnnotation = label{Key: "fabric8.io/expose", Value: "true"}
+	// InjectAnnotation annotation tells that the service is exposed
+	InjectAnnotation = label{Key: "fabric8.io/inject", Value: "true"}
 	// ExposeHostNameAsAnnotationKey annotation sets the hostname to use
 	ExposeHostNameAsAnnotationKey = "fabric8.io/exposeHostNameAs"
 	// ExposeAnnotationKey annotation will be created with the exposed url
-	ExposeAnnotationKey           = "fabric8.io/exposeURL"
+	ExposeAnnotationKey = "fabric8.io/exposeURL"
 	// ExposePortAnnotationKey annotation sets the service port to export
-	ExposePortAnnotationKey       = "fabric8.io/exposePort"
+	ExposePortAnnotationKey = "fabric8.io/exposePort"
 	// APIServicePathAnnotationKey annotation sets the path to export
-	APIServicePathAnnotationKey   = "api.service.kubernetes.io/path"
+	APIServicePathAnnotationKey = "api.service.kubernetes.io/path"
 )
 
-type exposeStrategyFunc = func(client kubernetes.Interface, config *Config) (ExposeStrategy, error)
+type exposeStrategyFunc = func(ctx context.Context, client kubernetes.Interface, config *Config) (ExposeStrategy, error)
+
 var exposeStrategyFuncs map[string]exposeStrategyFunc = map[string]exposeStrategyFunc{
 	"ambassador":   NewAmbassadorStrategy,
 	"ingress":      NewIngressStrategy,
@@ -66,15 +68,15 @@ var exposeStrategyFuncs map[string]exposeStrategyFunc = map[string]exposeStrateg
 }
 
 // New creates a new strategy
-func New(client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
+func New(ctx context.Context, client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
 	exposer := strings.ToLower(config.Exposer)
 	if exposer == "" || exposer == "auto" {
-		return NewAutoStrategy(client, config)
+		return NewAutoStrategy(ctx, client, config)
 	}
 
 	f, ok := exposeStrategyFuncs[exposer]
 	if ok {
-		strategy, err := f(client, config)
+		strategy, err := f(ctx, client, config)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create %s expose strategy", exposer)
 		}

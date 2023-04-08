@@ -1,6 +1,7 @@
 package exposestrategy
 
 import (
+	"context"
 	"testing"
 
 	"k8s.io/api/core/v1"
@@ -11,18 +12,18 @@ import (
 )
 
 func TestAmbassadorStrategy_Add(t *testing.T) {
-	examples := []struct{
+	examples := []struct {
 		name     string
 		config   Config
 		svc      v1.Service
 		expected map[string]string
 	}{{
-		name:     "simple",
-		config:   Config{
+		name: "simple",
+		config: Config{
 			Domain:      "my-domain.com",
 			URLTemplate: "{{.Service}}.{{.Namespace}}.{{.Domain}}",
 		},
-		svc:      v1.Service{
+		svc: v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
 				Name:      "svc",
@@ -39,8 +40,7 @@ func TestAmbassadorStrategy_Add(t *testing.T) {
 		},
 		expected: map[string]string{
 			ExposeAnnotationKey: "http://svc.main.my-domain.com",
-			"getambassador.io/config":
-`apiVersion: ambassador/v1
+			"getambassador.io/config": `apiVersion: ambassador/v1
 kind: Mapping
 host: svc.main.my-domain.com
 name: svc.main.my-domain.com_main_mapping
@@ -49,18 +49,18 @@ prefix: /
 ---`,
 		},
 	}, {
-		name:     "TLSAcme",
-		config:   Config{
+		name: "TLSAcme",
+		config: Config{
 			Domain:      "my-domain.com",
 			URLTemplate: "{{.Service}}.{{.Namespace}}.{{.Domain}}",
 			NamePrefix:  "my-prefix",
 			TLSAcme:     true,
 			PathMode:    PathModeUsePath,
 		},
-		svc:      v1.Service{
+		svc: v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   "main",
-				Name:        "my-prefix-svc",
+				Namespace: "main",
+				Name:      "my-prefix-svc",
 				Annotations: map[string]string{
 					ExposePortAnnotationKey: "456",
 				},
@@ -77,8 +77,7 @@ prefix: /
 		},
 		expected: map[string]string{
 			ExposeAnnotationKey: "https://my-domain.com/main/svc",
-			"getambassador.io/config":
-`apiVersion: ambassador/v1
+			"getambassador.io/config": `apiVersion: ambassador/v1
 kind: Mapping
 host: my-domain.com
 name: my-domain.com_main_mapping
@@ -95,14 +94,14 @@ config:
 ---`,
 		},
 	}, {
-		name:     "TLSSecretName",
-		config:   Config{
+		name: "TLSSecretName",
+		config: Config{
 			Domain:        "my-domain.com",
 			URLTemplate:   "{{.Service}}-{{.Namespace}}.{{.Domain}}",
 			NamePrefix:    "my-prefix",
 			TLSSecretName: "my-tls-secret",
 		},
-		svc:      v1.Service{
+		svc: v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
 				Name:      "svc",
@@ -122,8 +121,7 @@ config:
 		},
 		expected: map[string]string{
 			ExposeAnnotationKey: "https://svc.main.my-domain.com/my/path",
-			"getambassador.io/config":
-`apiVersion: ambassador/v1
+			"getambassador.io/config": `apiVersion: ambassador/v1
 kind: Mapping
 host: my-domain.com
 name: svc.main.my-domain.com
@@ -142,7 +140,7 @@ config:
 	}}
 	for _, example := range examples {
 		client := fake.NewSimpleClientset(example.svc.DeepCopy())
-		strategy, err := NewAmbassadorStrategy(client, &example.config)
+		strategy, err := NewAmbassadorStrategy(nil, client, &example.config)
 		if assert.NoError(t, err, example.name) {
 			continue
 		}
@@ -152,7 +150,8 @@ config:
 			continue
 		}
 
-		svc, err := client.CoreV1().Services(example.svc.Namespace).Get(example.svc.Name, metav1.GetOptions{})
+		ctx := context.Background()
+		svc, err := client.CoreV1().Services(example.svc.Namespace).Get(ctx, example.svc.Name, metav1.GetOptions{})
 		if assert.NoError(t, err, example.name) {
 			continue
 		}
@@ -164,13 +163,13 @@ config:
 }
 
 func TestAmbassadorStrategy_Clean(t *testing.T) {
-	examples := []struct{
+	examples := []struct {
 		name     string
 		svc      v1.Service
 		expected map[string]string
 	}{{
-		name:     "to clean",
-		svc:      v1.Service{
+		name: "to clean",
+		svc: v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
 				Name:      "svc",
@@ -182,8 +181,8 @@ func TestAmbassadorStrategy_Clean(t *testing.T) {
 		},
 		expected: map[string]string{},
 	}, {
-		name:     "to skip",
-		svc:      v1.Service{
+		name: "to skip",
+		svc: v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
 				Name:      "svc",
@@ -207,7 +206,8 @@ func TestAmbassadorStrategy_Clean(t *testing.T) {
 			continue
 		}
 
-		svc, err = client.CoreV1().Services(example.svc.Namespace).Get(example.svc.Name, metav1.GetOptions{})
+		ctx := context.Background()
+		svc, err = client.CoreV1().Services(example.svc.Namespace).Get(ctx, example.svc.Name, metav1.GetOptions{})
 		if assert.NoError(t, err, example.name) {
 			continue
 		}

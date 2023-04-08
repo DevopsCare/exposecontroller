@@ -1,6 +1,7 @@
 package exposestrategy
 
 import (
+	"context"
 	"testing"
 
 	"k8s.io/api/core/v1"
@@ -14,8 +15,8 @@ import (
 func TestLoadBalancerStrategy_Add(t *testing.T) {
 	client := fake.NewSimpleClientset(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
 				"test": "test",
 			},
@@ -25,7 +26,7 @@ func TestLoadBalancerStrategy_Add(t *testing.T) {
 			ClusterIP: "my-cluster-ip",
 		},
 	})
-	strategy, err := NewLoadBalancerStrategy(client, &Config{})
+	strategy, err := NewLoadBalancerStrategy(nil, client, &Config{})
 	require.NoError(t, err)
 	err = strategy.Sync()
 	require.NoError(t, err)
@@ -36,12 +37,13 @@ func TestLoadBalancerStrategy_Add(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-	svc, err := client.CoreV1().Services("ns").Get("svc", metav1.GetOptions{})
+	ctx := context.Background()
+	svc, err := client.CoreV1().Services("ns").Get(ctx, "svc", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		expected := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   "ns",
-				Name:        "svc",
+				Namespace: "ns",
+				Name:      "svc",
 				Annotations: map[string]string{
 					"test":              "test",
 					ExposeAnnotationKey: "",
@@ -55,12 +57,12 @@ func TestLoadBalancerStrategy_Add(t *testing.T) {
 		assert.Equal(t, expected, svc)
 	}
 	assert.False(t, strategy.HasSynced(), "unsynced")
-	_, err = client.CoreV1().Services("ns").Update(&v1.Service{
+	_, err = client.CoreV1().Services("ns").Update(ctx, &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
-				"test": "test",
+				"test":              "test",
 				ExposeAnnotationKey: "",
 			},
 		},
@@ -69,12 +71,12 @@ func TestLoadBalancerStrategy_Add(t *testing.T) {
 			ClusterIP:      "my-cluster-ip",
 			LoadBalancerIP: "my-lb-ip",
 		},
-	})
+	}, metav1.UpdateOptions{})
 	require.NoError(t, err)
 	err = strategy.Add(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
 				ExposeAnnotationKey: "",
 			},
@@ -85,12 +87,12 @@ func TestLoadBalancerStrategy_Add(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-	svc, err = client.CoreV1().Services("ns").Get("svc", metav1.GetOptions{})
+	svc, err = client.CoreV1().Services("ns").Get(ctx, "svc", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		expected := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   "ns",
-				Name:        "svc",
+				Namespace: "ns",
+				Name:      "svc",
 				Annotations: map[string]string{
 					"test":              "test",
 					ExposeAnnotationKey: "http://my-lb-ip",
@@ -110,10 +112,10 @@ func TestLoadBalancerStrategy_Add(t *testing.T) {
 func TestLoadBalancerStrategy_Clean(t *testing.T) {
 	svc1 := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns1",
-			Name:        "svc1",
+			Namespace: "ns1",
+			Name:      "svc1",
 			Annotations: map[string]string{
-				"test": "test",
+				"test":              "test",
 				ExposeAnnotationKey: "",
 			},
 		},
@@ -134,7 +136,7 @@ func TestLoadBalancerStrategy_Clean(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset(svc2.DeepCopy())
-	strategy, err := NewLoadBalancerStrategy(client, &Config{})
+	strategy, err := NewLoadBalancerStrategy(nil, client, &Config{})
 	require.NoError(t, err)
 	err = strategy.Sync()
 	require.NoError(t, err)
@@ -143,13 +145,14 @@ func TestLoadBalancerStrategy_Clean(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, strategy.HasSynced(), "unsynced")
 	// Add it late to be sure it wasn't updated by the strategy
-	_, err = client.CoreV1().Services("ns1").Create(svc1.DeepCopy())
+	ctx := context.Background()
+	_, err = client.CoreV1().Services("ns1").Create(ctx, svc1.DeepCopy(), metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	err = strategy.Clean(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns1",
-			Name:        "svc1",
+			Namespace: "ns1",
+			Name:      "svc1",
 			Annotations: map[string]string{
 				ExposeAnnotationKey: "",
 			},
@@ -162,12 +165,12 @@ func TestLoadBalancerStrategy_Clean(t *testing.T) {
 	err = strategy.Clean(svc2.DeepCopy())
 	assert.NoError(t, err)
 
-	svc, err := client.CoreV1().Services("ns1").Get("svc1", metav1.GetOptions{})
+	svc, err := client.CoreV1().Services("ns1").Get(ctx, "svc1", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		expected := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   "ns1",
-				Name:        "svc1",
+				Namespace: "ns1",
+				Name:      "svc1",
 				Annotations: map[string]string{
 					"test": "test",
 				},
@@ -179,7 +182,7 @@ func TestLoadBalancerStrategy_Clean(t *testing.T) {
 		assert.Equal(t, expected, svc, "managed")
 	}
 
-	svc, err = client.CoreV1().Services("ns2").Get("svc2", metav1.GetOptions{})
+	svc, err = client.CoreV1().Services("ns2").Get(ctx, "svc2", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, svc2, svc, "unmanaged")
 	}
@@ -190,8 +193,8 @@ func TestLoadBalancerStrategy_Clean(t *testing.T) {
 func TestLoadBalancerStrategy_Delete(t *testing.T) {
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
 				ExposeAnnotationKey: "",
 			},
@@ -202,7 +205,7 @@ func TestLoadBalancerStrategy_Delete(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset()
-	strategy, err := NewLoadBalancerStrategy(client, &Config{})
+	strategy, err := NewLoadBalancerStrategy(nil, client, &Config{})
 	require.NoError(t, err)
 	err = strategy.Sync()
 	require.NoError(t, err)
@@ -211,12 +214,13 @@ func TestLoadBalancerStrategy_Delete(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, strategy.HasSynced(), "unsynced")
 	// Add it late to be sure it wasn't updated by the strategy
-	_, err = client.CoreV1().Services("ns").Create(svc.DeepCopy())
+	ctx := context.Background()
+	_, err = client.CoreV1().Services("ns").Create(ctx, svc.DeepCopy(), metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	err = client.CoreV1().Services(svc.Namespace).Delete(svc.Name, &metav1.DeleteOptions{})
+	err = client.CoreV1().Services(svc.Namespace).Delete(ctx, svc.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 	err = strategy.Delete(svc.DeepCopy())
 	require.NoError(t, err)
-	assert.True(t, strategy.HasSynced(), "usynced")
+	assert.True(t, strategy.HasSynced(), "unsynced")
 }

@@ -1,7 +1,9 @@
 package exposestrategy
 
 import (
+	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/pkg/errors"
 
@@ -11,15 +13,17 @@ import (
 
 // LoadBalancerStrategy is a strategy that changes the type of services to LoadBalancer
 type LoadBalancerStrategy struct {
+	ctx    context.Context
 	client kubernetes.Interface
 	// The services to wait for their load balancer IP
-	todo   map[string]bool
+	todo map[string]bool
 }
 
 // NewLoadBalancerStrategy a new LoadBalancerStrategy
-func NewLoadBalancerStrategy(client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
+func NewLoadBalancerStrategy(ctx context.Context, client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
 	return &LoadBalancerStrategy{
-		client:  client,
+		ctx:    ctx,
+		client: client,
 	}, nil
 }
 
@@ -56,7 +60,7 @@ func (s *LoadBalancerStrategy) Add(svc *v1.Service) error {
 	}
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(svc.Namespace).
-			Patch(svc.Name, patchType, patch)
+			Patch(s.ctx, svc.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrap(err, "failed to send patch")
 		}
@@ -85,7 +89,7 @@ func (s *LoadBalancerStrategy) Clean(svc *v1.Service) error {
 	}
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(clone.Namespace).
-			Patch(clone.Name, patchType, patch)
+			Patch(s.ctx, clone.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrap(err, "failed to send patch")
 		}

@@ -1,6 +1,7 @@
 package exposestrategy
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -22,7 +23,7 @@ const (
 )
 
 // NewAutoStrategy creates a new strategy, choose automatically
-func NewAutoStrategy(client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
+func NewAutoStrategy(ctx context.Context, client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
 	var err error
 	config.Exposer, err = getAutoDefaultExposeRule(client)
 	if err != nil {
@@ -32,14 +33,14 @@ func NewAutoStrategy(client kubernetes.Interface, config *Config) (ExposeStrateg
 
 	// only try to get domain if we need wildcard dns and one wasn't given to us
 	if config.Domain == "" && (strings.EqualFold(ingress, config.Exposer)) {
-		config.Domain, err = getAutoDefaultDomain(client)
+		config.Domain, err = getAutoDefaultDomain(ctx, client)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get a domain")
 		}
 		klog.Infof("Using domain: %s", config.Domain)
 	}
 
-	return New(client, config)
+	return New(ctx, client, config)
 }
 
 func getAutoDefaultExposeRule(c kubernetes.Interface) (string, error) {
@@ -59,13 +60,13 @@ func getAutoDefaultExposeRule(c kubernetes.Interface) (string, error) {
 	return ingress, nil
 }
 
-func getAutoDefaultDomain(c kubernetes.Interface) (string, error) {
-	nodes, err := c.CoreV1().Nodes().List(metav1.ListOptions{})
+func getAutoDefaultDomain(ctx context.Context, c kubernetes.Interface) (string, error) {
+	nodes, err := c.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", errors.Wrap(err, "failed to find any nodes")
 	}
 
-	// if we're mini* then there's only one node, any router / ingress controller deployed has to be on this one
+	// if we're mini* then there's only one node; any router / ingress controller deployed has to be on this one
 	if len(nodes.Items) == 1 {
 		node := nodes.Items[0]
 		if node.Name == "minishift" || node.Name == "minikube" {
@@ -79,7 +80,7 @@ func getAutoDefaultDomain(c kubernetes.Interface) (string, error) {
 
 	// check for a gofabric8 ingress labelled node
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: map[string]string{"fabric8.io/externalIP": "true"}})
-	nodes, err = c.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: selector.String()})
+	nodes, err = c.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
 	if len(nodes.Items) == 1 {
 		node := nodes.Items[0]
 		ip, err := getExternalIP(node)
@@ -90,7 +91,7 @@ func getAutoDefaultDomain(c kubernetes.Interface) (string, error) {
 	}
 
 	// look for a stackpoint HA proxy
-	pod, _ := c.CoreV1().Pods(stackpointNS).Get(stackpointHAProxy, metav1.GetOptions{})
+	pod, _ := c.CoreV1().Pods(stackpointNS).Get(ctx, stackpointHAProxy, metav1.GetOptions{})
 	if pod != nil {
 		containers := pod.Spec.Containers
 		for _, container := range containers {

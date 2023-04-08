@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeStrategy struct{
+type fakeStrategy struct {
 	testing       *testing.T
 	tasks         []map[string]bool
 	ignore        []map[string]bool
@@ -32,7 +33,7 @@ func (s *fakeStrategy) checkTask(action string, svc *v1.Service) {
 	if svc != nil {
 		action = fmt.Sprintf("%s:%s/%s:%s", action, svc.Namespace, svc.Name, svc.ResourceVersion)
 	}
-	if len(s.tasks) > 0 &&  s.tasks[0][action] {
+	if len(s.tasks) > 0 && s.tasks[0][action] {
 		delete(s.tasks[0], action)
 		if len(s.tasks[0]) == 0 {
 			s.tasks = s.tasks[1:]
@@ -61,7 +62,7 @@ func (s *fakeStrategy) checkEnd() {
 
 func (s *fakeStrategy) Sync() error {
 	s.checkTask("Sync", nil)
-			var err error
+	var err error
 	if s.syncFunc != nil {
 		err = s.syncFunc()
 		assert.NoError(s.testing, err)
@@ -78,7 +79,7 @@ func (s *fakeStrategy) HasSynced() bool {
 
 func (s *fakeStrategy) Add(svc *v1.Service) error {
 	s.checkTask("Add", svc)
-			var err error
+	var err error
 	if s.addFunc != nil {
 		err = s.addFunc(svc)
 		assert.NoError(s.testing, err)
@@ -88,7 +89,7 @@ func (s *fakeStrategy) Add(svc *v1.Service) error {
 
 func (s *fakeStrategy) Clean(svc *v1.Service) error {
 	s.checkTask("Clean", svc)
-			var err error
+	var err error
 	if s.cleanFunc != nil {
 		err = s.cleanFunc(svc)
 		assert.NoError(s.testing, err)
@@ -98,7 +99,7 @@ func (s *fakeStrategy) Clean(svc *v1.Service) error {
 
 func (s *fakeStrategy) Delete(svc *v1.Service) error {
 	s.checkTask("Delete", svc)
-			var err error
+	var err error
 	if s.deleteFunc != nil {
 		err = s.deleteFunc(svc)
 		assert.NoError(s.testing, err)
@@ -107,11 +108,12 @@ func (s *fakeStrategy) Delete(svc *v1.Service) error {
 }
 
 func TestRun_controllerSynced(t *testing.T) {
+	ctx := context.Background()
 	services := []runtime.Object{
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc1",
+				Name:      "svc1",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -121,7 +123,7 @@ func TestRun_controllerSynced(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "other",
-				Name:     "svc2",
+				Name:      "svc2",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -131,7 +133,7 @@ func TestRun_controllerSynced(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc3",
+				Name:      "svc3",
 				Annotations: map[string]string{
 					"todo": "true",
 				},
@@ -141,7 +143,7 @@ func TestRun_controllerSynced(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc4",
+				Name:      "svc4",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -170,7 +172,7 @@ func TestRun_controllerSynced(t *testing.T) {
 				svc = svc.DeepCopy()
 				svc.Annotations["checked"] = "true"
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			}
 			return err
 		},
@@ -180,7 +182,7 @@ func TestRun_controllerSynced(t *testing.T) {
 				svc = svc.DeepCopy()
 				delete(svc.Annotations, "todo")
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			}
 			return err
 		},
@@ -190,7 +192,7 @@ func TestRun_controllerSynced(t *testing.T) {
 		testStrategy = nil
 	}()
 
-	err := Run(client, "main", &Config{}, time.Second)
+	err := Run(ctx, client, "main", &Config{}, time.Second)
 	require.NoError(t, err)
 	strategy.checkEnd()
 }
@@ -200,7 +202,7 @@ func TestRun_strategySynced(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc1",
+				Name:      "svc1",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -210,7 +212,7 @@ func TestRun_strategySynced(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "other",
-				Name:     "svc2",
+				Name:      "svc2",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -220,7 +222,7 @@ func TestRun_strategySynced(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc3",
+				Name:      "svc3",
 				Annotations: map[string]string{
 					"todo": "true",
 				},
@@ -230,10 +232,10 @@ func TestRun_strategySynced(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc4",
+				Name:      "svc4",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
-					"todo": "true",
+					"todo":                              "true",
 				},
 				ResourceVersion: "4",
 			},
@@ -242,6 +244,7 @@ func TestRun_strategySynced(t *testing.T) {
 	client := fake.NewSimpleClientset(services...)
 
 	todo := map[string]bool{}
+	ctx := context.Background()
 	strategy := fakeStrategy{
 		testing: t,
 		tasks: []map[string]bool{{
@@ -265,13 +268,13 @@ func TestRun_strategySynced(t *testing.T) {
 				svc = svc.DeepCopy()
 				svc.Annotations["todo"] = "true"
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			} else if svc.Annotations["todo"] == "true" {
 				delete(todo, svc.Name)
 				svc = svc.DeepCopy()
 				svc.Annotations["todo"] = "false"
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			}
 			return err
 		},
@@ -281,7 +284,7 @@ func TestRun_strategySynced(t *testing.T) {
 				svc = svc.DeepCopy()
 				delete(svc.Annotations, "todo")
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			}
 			return err
 		},
@@ -294,7 +297,7 @@ func TestRun_strategySynced(t *testing.T) {
 		testStrategy = nil
 	}()
 
-	err := Run(client, "main", &Config{}, time.Second)
+	err := Run(ctx, client, "main", &Config{}, time.Second)
 	require.NoError(t, err)
 	strategy.checkEnd()
 }
@@ -304,7 +307,7 @@ func TestRun_timeout(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc1",
+				Name:      "svc1",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -330,17 +333,20 @@ func TestRun_timeout(t *testing.T) {
 		testStrategy = nil
 	}()
 
-	err := Run(client, "main", &Config{}, time.Second)
+	ctx := context.Background()
+	err := Run(ctx, client, "main", &Config{}, time.Second)
 	require.Error(t, err)
 	strategy.checkEnd()
 }
 
 func TestDaemon(t *testing.T) {
+	ctx := context.Background()
+
 	services := []runtime.Object{
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc1",
+				Name:      "svc1",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -350,7 +356,7 @@ func TestDaemon(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "other",
-				Name:     "svc2",
+				Name:      "svc2",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 				},
@@ -360,7 +366,7 @@ func TestDaemon(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc3",
+				Name:      "svc3",
 				Annotations: map[string]string{
 					"todo": "true",
 				},
@@ -370,10 +376,10 @@ func TestDaemon(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc4",
+				Name:      "svc4",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
-					"todo": "true",
+					"todo":                              "true",
 				},
 				ResourceVersion: "4",
 			},
@@ -381,10 +387,10 @@ func TestDaemon(t *testing.T) {
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "main",
-				Name:     "svc5",
+				Name:      "svc5",
 				Annotations: map[string]string{
 					exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
-					"todo": "true",
+					"todo":                              "true",
 				},
 				ResourceVersion: "5",
 			},
@@ -415,13 +421,13 @@ func TestDaemon(t *testing.T) {
 				svc = svc.DeepCopy()
 				svc.Annotations["todo"] = "true"
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			} else if svc.Annotations["todo"] == "true" {
 				delete(todo, svc.Name)
 				svc = svc.DeepCopy()
 				svc.Annotations["todo"] = "false"
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			}
 			return err
 		},
@@ -431,7 +437,7 @@ func TestDaemon(t *testing.T) {
 				svc = svc.DeepCopy()
 				delete(svc.Annotations, "todo")
 				svc.ResourceVersion = svc.ResourceVersion + "+"
-				_, err = client.CoreV1().Services(svc.Namespace).Update(svc)
+				_, err = client.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 			}
 			return err
 		},
@@ -444,13 +450,13 @@ func TestDaemon(t *testing.T) {
 		testStrategy = nil
 	}()
 
-	controller, err := Daemon(client, "main", &Config{}, time.Hour)
+	controller, err := Daemon(ctx, client, "main", &Config{}, time.Hour)
 	require.NoError(t, err)
 	stopChan := make(chan struct{})
 	defer close(stopChan)
 	go controller.Run(stopChan)
 
-	time.Sleep(500*time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	strategy.checkEnd()
 
 	strategy.tasks = []map[string]bool{{
@@ -462,39 +468,41 @@ func TestDaemon(t *testing.T) {
 		"Delete:main/svc5:5+": true,
 	}}
 
-	client.CoreV1().Services("main").Update(&v1.Service{
+	client.CoreV1().Services("main").Update(ctx, &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name:     "svc1",
+			Name:      "svc1",
 			Annotations: map[string]string{
 				exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
-				"todo": "false",
+				"todo":                              "false",
 			},
 			ResourceVersion: "6",
 		},
-	})
-	client.CoreV1().Services("main").Update(&v1.Service{
+	}, metav1.UpdateOptions{})
+	client.CoreV1().Services("main").Update(ctx, &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name:     "svc3",
+			Name:      "svc3",
 			Annotations: map[string]string{
 				exposestrategy.ExposeAnnotation.Key: exposestrategy.ExposeAnnotation.Value,
 			},
 			ResourceVersion: "7",
 		},
-	})
-	client.CoreV1().Services("main").Update(&v1.Service{
+	}, metav1.UpdateOptions{})
+
+	client.CoreV1().Services("main").Update(ctx, &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "main",
-			Name:     "svc4",
+			Name:      "svc4",
 			Annotations: map[string]string{
 				"todo": "true",
 			},
 			ResourceVersion: "8",
 		},
-	})
-	client.CoreV1().Services("main").Delete("svc5", &metav1.DeleteOptions{})
+	}, metav1.UpdateOptions{})
 
-	time.Sleep(500*time.Millisecond)
+	client.CoreV1().Services("main").Delete(ctx, "svc5", metav1.DeleteOptions{})
+
+	time.Sleep(500 * time.Millisecond)
 	strategy.checkEnd()
 }

@@ -1,6 +1,7 @@
 package exposestrategy
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -14,21 +15,22 @@ import (
 
 // NodePortStrategy is a strategy that changes the type of services to NodePort
 type NodePortStrategy struct {
-	client  kubernetes.Interface
+	ctx    context.Context
+	client kubernetes.Interface
 
 	nodeIP string
 	// The services to wait for their node port
-	todo   map[string]bool
+	todo map[string]bool
 }
 
 // ExternalIPLabel is the node's label to export the external IP of the cluster
 const ExternalIPLabel = "fabric8.io/externalIP"
 
 // NewNodePortStrategy creates a new NodePortStrategy
-func NewNodePortStrategy(client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
+func NewNodePortStrategy(ctx context.Context, client kubernetes.Interface, config *Config) (ExposeStrategy, error) {
 	ip := config.NodeIP
 	if len(ip) == 0 {
-		l, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
+		l, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to list nodes")
 		}
@@ -49,8 +51,9 @@ func NewNodePortStrategy(client kubernetes.Interface, config *Config) (ExposeStr
 	}
 
 	return &NodePortStrategy{
-		client:  client,
-		nodeIP:  ip,
+		ctx:    ctx,
+		client: client,
+		nodeIP: ip,
 	}, nil
 }
 
@@ -129,7 +132,7 @@ func (s *NodePortStrategy) Add(svc *v1.Service) error {
 	}
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(svc.Namespace).
-			Patch(svc.Name, patchType, patch)
+			Patch(s.ctx, svc.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("failed to send patch for %s/%s patch %s", svc.Namespace, svc.Name, string(patch)))
 		}
@@ -158,7 +161,7 @@ func (s *NodePortStrategy) Clean(svc *v1.Service) error {
 	}
 	if patch != nil {
 		_, err = s.client.CoreV1().Services(clone.Namespace).
-			Patch(clone.Name, patchType, patch)
+			Patch(s.ctx, clone.Name, patchType, patch, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrap(err, "failed to send patch")
 		}

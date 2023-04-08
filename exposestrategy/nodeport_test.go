@@ -1,6 +1,7 @@
 package exposestrategy
 
 import (
+	"context"
 	"testing"
 
 	"k8s.io/api/core/v1"
@@ -20,11 +21,11 @@ func TestNodePortStrategy_NodeIP(t *testing.T) {
 			},
 		},
 	})
-	strategy, err := NewNodePortStrategy(client, &Config{})
+	strategy, err := NewNodePortStrategy(nil, client, &Config{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "my-external-ip", strategy.(*NodePortStrategy).nodeIP)
 	}
-	strategy, err = NewNodePortStrategy(client, &Config{
+	strategy, err = NewNodePortStrategy(nil, client, &Config{
 		NodeIP: "my-node-ip",
 	})
 	if assert.NoError(t, err) {
@@ -45,11 +46,11 @@ func TestNodePortStrategy_NodeIP(t *testing.T) {
 			}},
 		},
 	})
-	strategy, err = NewNodePortStrategy(client, &Config{})
+	strategy, err = NewNodePortStrategy(nil, client, &Config{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "192.168.1.200", strategy.(*NodePortStrategy).nodeIP)
 	}
-	strategy, err = NewNodePortStrategy(client, &Config{
+	strategy, err = NewNodePortStrategy(nil, client, &Config{
 		NodeIP: "my-node-ip",
 	})
 	if assert.NoError(t, err) {
@@ -67,11 +68,11 @@ func TestNodePortStrategy_NodeIP(t *testing.T) {
 			}},
 		},
 	})
-	strategy, err = NewNodePortStrategy(client, &Config{})
+	strategy, err = NewNodePortStrategy(nil, client, &Config{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "192.168.1.100", strategy.(*NodePortStrategy).nodeIP)
 	}
-	strategy, err = NewNodePortStrategy(client, &Config{
+	strategy, err = NewNodePortStrategy(nil, client, &Config{
 		NodeIP: "my-node-ip",
 	})
 	if assert.NoError(t, err) {
@@ -83,9 +84,9 @@ func TestNodePortStrategy_NodeIP(t *testing.T) {
 			Name: "my-node",
 		},
 	})
-	strategy, err = NewNodePortStrategy(client, &Config{})
+	strategy, err = NewNodePortStrategy(nil, client, &Config{})
 	assert.Error(t, err)
-	strategy, err = NewNodePortStrategy(client, &Config{
+	strategy, err = NewNodePortStrategy(nil, client, &Config{
 		NodeIP: "my-node-ip",
 	})
 	if assert.NoError(t, err) {
@@ -96,8 +97,8 @@ func TestNodePortStrategy_NodeIP(t *testing.T) {
 func TestNodePortStrategy_Add(t *testing.T) {
 	client := fake.NewSimpleClientset(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
 				"test": "test",
 			},
@@ -110,7 +111,7 @@ func TestNodePortStrategy_Add(t *testing.T) {
 			}},
 		},
 	})
-	strategy, err := NewNodePortStrategy(client, &Config{
+	strategy, err := NewNodePortStrategy(nil, client, &Config{
 		NodeIP: "my-node-ip",
 	})
 	require.NoError(t, err)
@@ -122,19 +123,20 @@ func TestNodePortStrategy_Add(t *testing.T) {
 			Name:      "svc",
 		},
 		Spec: v1.ServiceSpec{
-			Type:  v1.ServiceTypeClusterIP,
+			Type: v1.ServiceTypeClusterIP,
 			Ports: []v1.ServicePort{{
 				Port: 1234,
 			}},
 		},
 	})
 	assert.NoError(t, err)
-	svc, err := client.CoreV1().Services("ns").Get("svc", metav1.GetOptions{})
+	ctx := context.Background()
+	svc, err := client.CoreV1().Services("ns").Get(ctx, "svc", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		expected := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   "ns",
-				Name:        "svc",
+				Namespace: "ns",
+				Name:      "svc",
 				Annotations: map[string]string{
 					"test":              "test",
 					ExposeAnnotationKey: "",
@@ -151,10 +153,10 @@ func TestNodePortStrategy_Add(t *testing.T) {
 		assert.Equal(t, expected, svc)
 	}
 	assert.False(t, strategy.HasSynced(), "unsynced")
-	_, err = client.CoreV1().Services("ns").Update(&v1.Service{
+	_, err = client.CoreV1().Services("ns").Update(ctx, &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
 				"test":              "test",
 				ExposeAnnotationKey: "",
@@ -168,12 +170,12 @@ func TestNodePortStrategy_Add(t *testing.T) {
 				NodePort: 5678,
 			}},
 		},
-	})
+	}, metav1.UpdateOptions{})
 	require.NoError(t, err)
 	err = strategy.Add(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
 				ExposeAnnotationKey: "",
 			},
@@ -188,12 +190,12 @@ func TestNodePortStrategy_Add(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-	svc, err = client.CoreV1().Services("ns").Get("svc", metav1.GetOptions{})
+	svc, err = client.CoreV1().Services("ns").Get(ctx, "svc", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		expected := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   "ns",
-				Name:        "svc",
+				Namespace: "ns",
+				Name:      "svc",
 				Annotations: map[string]string{
 					"test":              "test",
 					ExposeAnnotationKey: "http://my-node-ip:5678",
@@ -203,7 +205,7 @@ func TestNodePortStrategy_Add(t *testing.T) {
 				Type:      v1.ServiceTypeNodePort,
 				ClusterIP: "my-cluster-ip",
 				Ports: []v1.ServicePort{{
-					Port: 1234,
+					Port:     1234,
 					NodePort: 5678,
 				}},
 			},
@@ -216,15 +218,15 @@ func TestNodePortStrategy_Add(t *testing.T) {
 func TestNodePortStrategy_Clean(t *testing.T) {
 	svc1 := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns1",
-			Name:        "svc1",
+			Namespace: "ns1",
+			Name:      "svc1",
 			Annotations: map[string]string{
-				"test": "test",
+				"test":              "test",
 				ExposeAnnotationKey: "",
 			},
 		},
 		Spec: v1.ServiceSpec{
-			Type:  v1.ServiceTypeNodePort,
+			Type: v1.ServiceTypeNodePort,
 			Ports: []v1.ServicePort{{
 				Port: 1234,
 			}},
@@ -237,7 +239,7 @@ func TestNodePortStrategy_Clean(t *testing.T) {
 			Annotations: map[string]string{},
 		},
 		Spec: v1.ServiceSpec{
-			Type:  v1.ServiceTypeNodePort,
+			Type: v1.ServiceTypeNodePort,
 			Ports: []v1.ServicePort{{
 				Port:     1234,
 				NodePort: 5678,
@@ -246,7 +248,7 @@ func TestNodePortStrategy_Clean(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset(svc2.DeepCopy())
-	strategy, err := NewNodePortStrategy(client, &Config{
+	strategy, err := NewNodePortStrategy(nil, client, &Config{
 		NodeIP: "my-node-ip",
 	})
 	require.NoError(t, err)
@@ -257,19 +259,20 @@ func TestNodePortStrategy_Clean(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, strategy.HasSynced(), "unsynced")
 	// Add it late to be sure it wasn't updated by the strategy
-	_, err = client.CoreV1().Services("ns1").Create(svc1.DeepCopy())
+	ctx := context.Background()
+	_, err = client.CoreV1().Services("ns1").Create(ctx, svc1.DeepCopy(), metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	err = strategy.Clean(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns1",
-			Name:        "svc1",
+			Namespace: "ns1",
+			Name:      "svc1",
 			Annotations: map[string]string{
 				ExposeAnnotationKey: "",
 			},
 		},
 		Spec: v1.ServiceSpec{
-			Type:  v1.ServiceTypeNodePort,
+			Type: v1.ServiceTypeNodePort,
 			Ports: []v1.ServicePort{{
 				Port: 1234,
 			}},
@@ -279,18 +282,18 @@ func TestNodePortStrategy_Clean(t *testing.T) {
 	err = strategy.Clean(svc2.DeepCopy())
 	assert.NoError(t, err)
 
-	svc, err := client.CoreV1().Services("ns1").Get("svc1", metav1.GetOptions{})
+	svc, err := client.CoreV1().Services("ns1").Get(ctx, "svc1", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		expected := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   "ns1",
-				Name:        "svc1",
+				Namespace: "ns1",
+				Name:      "svc1",
 				Annotations: map[string]string{
 					"test": "test",
 				},
 			},
 			Spec: v1.ServiceSpec{
-				Type:  v1.ServiceTypeClusterIP,
+				Type: v1.ServiceTypeClusterIP,
 				Ports: []v1.ServicePort{{
 					Port: 1234,
 				}},
@@ -299,7 +302,7 @@ func TestNodePortStrategy_Clean(t *testing.T) {
 		assert.Equal(t, expected, svc, "managed")
 	}
 
-	svc, err = client.CoreV1().Services("ns2").Get("svc2", metav1.GetOptions{})
+	svc, err = client.CoreV1().Services("ns2").Get(ctx, "svc2", metav1.GetOptions{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, svc2, svc, "unmanaged")
 	}
@@ -310,22 +313,22 @@ func TestNodePortStrategy_Clean(t *testing.T) {
 func TestNodePortStrategy_Delete(t *testing.T) {
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   "ns",
-			Name:        "svc",
+			Namespace: "ns",
+			Name:      "svc",
 			Annotations: map[string]string{
 				ExposeAnnotationKey: "",
 			},
 		},
 		Spec: v1.ServiceSpec{
-			Type:  v1.ServiceTypeNodePort,
+			Type: v1.ServiceTypeNodePort,
 			Ports: []v1.ServicePort{{
-				Port:     1234,
+				Port: 1234,
 			}},
 		},
 	}
 
 	client := fake.NewSimpleClientset()
-	strategy, err := NewNodePortStrategy(client, &Config{
+	strategy, err := NewNodePortStrategy(nil, client, &Config{
 		NodeIP: "my-node-ip",
 	})
 	require.NoError(t, err)
@@ -336,12 +339,13 @@ func TestNodePortStrategy_Delete(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, strategy.HasSynced(), "unsynced")
 	// Add it late to be sure it wasn't updated by the strategy
-	_, err = client.CoreV1().Services("ns").Create(svc.DeepCopy())
+	ctx := context.Background()
+	_, err = client.CoreV1().Services("ns").Create(ctx, svc.DeepCopy(), metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	err = client.CoreV1().Services(svc.Namespace).Delete(svc.Name, &metav1.DeleteOptions{})
+	err = client.CoreV1().Services(svc.Namespace).Delete(ctx, svc.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 	err = strategy.Delete(svc.DeepCopy())
 	require.NoError(t, err)
-	assert.True(t, strategy.HasSynced(), "usynced")
+	assert.True(t, strategy.HasSynced(), "unsynced")
 }
