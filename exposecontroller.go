@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olli-ai/exposecontroller/controller"
-	"github.com/olli-ai/exposecontroller/exposestrategy"
+	"github.com/devopscare/exposecontroller/controller"
+	"github.com/devopscare/exposecontroller/exposestrategy"
 	"k8s.io/klog"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

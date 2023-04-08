@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/olli-ai/exposecontroller/exposestrategy"
+	"github.com/devopscare/exposecontroller/exposestrategy"
 )
 
 const (
