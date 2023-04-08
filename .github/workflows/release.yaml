@@ -8,7 +8,7 @@ on:
 env:
   IMAGE_NAME: exposecontroller
   DOCKER_REGISTRY: ghcr.io
-  DOCKER_REPOSITORY: DevopsCare/exposecontroller
+  DOCKER_REPOSITORY: DevopsCare
 
 jobs:
   build-and-push:
