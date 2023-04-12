@@ -35,8 +35,7 @@ spec:
       - name: exposecontroller
         image: "{{ .Values.image.repository }}:{{ default .Chart.Version .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        command:
-        - /exposecontroller
+        args:
         - --daemon
         {{- if kindIs "slice" .Values.watchNamespaces }}
         - --watch-namespaces
