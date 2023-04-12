@@ -3,9 +3,10 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: devopscare/exposecontroller
+  repository: ghcr.io/devopscare/exposecontroller
   tag: 2.0.0
   pullPolicy: IfNotPresent
+imagePullSecrets: {}
 
 nameOverride: ""
 fullnameOverride: ""

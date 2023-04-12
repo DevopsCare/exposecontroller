@@ -72,3 +72,7 @@ metadata:
     helm.sh/chart: {{ include "exposecontroller.chart" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 8 }}
+{{- end }}
