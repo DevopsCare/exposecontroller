@@ -1,6 +1,7 @@
 # exposecontroller
 
-Automatically expose services creating ingress rules or modifying services to use kubernetes nodePort or loadBalancer service types
+Automatically expose services creating ingress rules or modifying services to use kubernetes nodePort or loadBalancer
+service types
 
 This is a fork from the dead project https://github.com/jenkins-x/exposecontroller in order to solve many problems
 
@@ -8,10 +9,7 @@ This is a fork from the dead project https://github.com/jenkins-x/exposecontroll
 
 ### From helm repository
 
-```bash
-helm repo add olli-ai https://olli-ai.github.io/helm-charts/
-helm upgrade --install exposecontroller olli-ai/exposecontroller
-```
+TODO
 
 ### Using Helm
 
@@ -23,9 +21,9 @@ helm upgrade --install exposecontroller ./deploy/helm-chart/exposecontroller
 
 ```bash
 # Create roles and service accounts
-kubectl apply -f https://raw.githubusercontent.com/olli-ai/exposecontroller/master/deploy/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/devopscare/exposecontroller/master/deploy/rbac.yaml
 # Create actual deployment
-kubectl apply -f https://raw.githubusercontent.com/olli-ai/exposecontroller/master/deploy/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/devopscare/exposecontroller/master/deploy/deployment.yaml
 ```
 
 ### In Jenkins-X environments
@@ -56,17 +54,21 @@ sed -i 's/^\( *\)urltemplate:.*/\0\n\1namePrefix: exposed-/' charts/preview/valu
 
 - Update everything: the project was based on a very old version of golang and kubernetes, it didn't even have go mod.
 - Give up openshift: the openshift library hasn't been updated for 2 years, so give up it's support.
-- Test everything: there was almost no test, and definitely nothing critical was tested. Yes, something that is supposed to make public all your services was not tested.
+- Test everything: there was almost no test, and definitely nothing critical was tested. Yes, something that is supposed
+  to make public all your services was not tested.
 - Fix various bugs everywhere in the code.
 - Fix incoherent annotations.
 - Fix several severe bugs in `ingress` exposer:
-  - ingresses were not properly updated when already existing, especially TLS configuration was not updated
-  - the `fabric8.io/ingress.annotations` annotation was parsed using split, so spaces would be kept, an extra newline would result in panic, and it was impossible to set a multiline annotation
-  - old ingresses would never be removed when changing the name of the ingress, or when the service is unexposed in run mode
+    - ingresses weren't properly updated when already existing, especially TLS configuration wasn't updated
+    - the `fabric8.io/ingress.annotations` annotation was parsed using split, so spaces would be kept, an extra newline
+      would result in panic, and it was impossible to set a multiline annotation
+    - old ingresses would never be removed when changing the name of the ingress, or when the service is unexposed in
+      run mode
 
 ## Usage
 
 You can expose any service with the annotation
+
 ```yaml
 metadata:
   annoations:
@@ -74,12 +76,16 @@ metadata:
 ```
 
 The available exposers are:
+
 - `Ingress` - [Kubernetes Ingress](http://kubernetes.io/docs/user-guide/ingress/)
 - `Ambassador` - [Ambassador](https://www.getambassador.io/)
 - `LoadBalancer` - Cloud provider external [load-balancer](http://kubernetes.io/docs/user-guide/load-balancer/)
-- `NodePort` - Recomended for local development using minikube / minishift without Ingress or Router running. See also the [Kubernetes NodePort](http://kubernetes.io/docs/user-guide/services/#type-nodeport) documentation.
+- `NodePort` - Recomended for local development using minikube / minishift without Ingress or Router running. See also
+  the [Kubernetes NodePort](http://kubernetes.io/docs/user-guide/services/#type-nodeport) documentation.
 
-The default and most versatile exposer is the `Ingress` exposer with `nginx` class. You can configure ingress annotations to your need:
+The default and most versatile exposer is the `Ingress` exposer with `nginx` class. You can configure ingress
+annotations to your need:
+
 ```yaml
 metadata:
   annoations:
@@ -196,3 +202,14 @@ metadata:
         prefix: "ROOT_URL = "
         expression: url
 ```
+
+Running in all namespaces
+===
+
+It's quite tricky to current code, but doable with small changes to helm.
+
+* set `watchCurrentNamespace: false` in values.yaml
+* comment `fail` line in rbac.yaml:5
+
+This will pass watchCurrentNamespace as false to code, that will leave all configmap values untouched, passing "" as
+namespace which is understood as "ALL" by api.
